@@ -1,0 +1,62 @@
+import 'dotenv/config';
+import express from 'express';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import IORedis from 'ioredis';
+import submissionsRouter from './routes/submissions.js';
+
+const app = express();
+const httpServer = createServer(app);
+
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST']
+  }
+});
+
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+app.use(express.json({ limit: '2mb' }));
+
+app.set('io', io);
+
+app.use('/api', submissionsRouter);
+
+// Subscribe to Redis pub/sub to receive worker notifications
+const redisSub = new IORedis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT) || 6379,
+  maxRetriesPerRequest: null
+});
+
+redisSub.subscribe('eval:done', (err) => {
+  if (err) console.error('Redis subscribe error:', err);
+  else console.log('Subscribed to eval:done channel');
+});
+
+redisSub.on('message', (channel, message) => {
+  if (channel === 'eval:done') {
+    try {
+      const { submissionId } = JSON.parse(message);
+      io.emit('evaluation:complete', { submissionId });
+      console.log('Emitted evaluation:complete for', submissionId);
+    } catch (e) {
+      console.error('Failed to parse eval:done message:', e);
+    }
+  }
+});
+
+// MongoDB
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/web_eval');
+mongoose.connection.on('connected', () => console.log('MongoDB connected'));
+mongoose.connection.on('error', (err) => console.error('MongoDB error:', err));
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
+});
+
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => console.log(`API server running on port ${PORT}`));
