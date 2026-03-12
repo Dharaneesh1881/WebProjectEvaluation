@@ -109,3 +109,13 @@ export async function getResult(submissionId) {
   });
   return handleResponse(res);
 }
+
+export async function getStudentProgress() {
+  const res = await fetch(`${API_BASE}/progress`, { headers: authHeaders() });
+  return handleResponse(res);  // { [assignmentId]: { bestScore, completed, completedAt, attempts } }
+}
+
+export async function getBestCode(assignmentId) {
+  const res = await fetch(`${API_BASE}/progress/${assignmentId}/code`, { headers: authHeaders() });
+  return handleResponse(res);  // { html, css, js }
+}

@@ -16,16 +16,17 @@
 
 import puppeteer from 'puppeteer';
 import IORedis from 'ioredis';
-import Submission    from '../models/Submission.js';
+import Submission from '../models/Submission.js';
 import EvaluationRun from '../models/EvaluationRun.js';
-import Assignment    from '../models/Assignment.js';
-import { buildPage, cleanupPage }           from './pageBuilder.js';
-import { runLinters }                        from './linterRunner.js';
-import { runFunctionalityTests }             from './functionalityTests.js';
-import { runInteractionTests }               from './tests/interactionTests.js';
-import { runVisualTest }                     from './visualTest.js';
-import { runLighthouse }                     from './lighthouseRunner.js';
-import { calculateScore }                    from './scoreCalculator.js';
+import Assignment from '../models/Assignment.js';
+import StudentProgress from '../models/StudentProgress.js';
+import { buildPage, cleanupPage } from './pageBuilder.js';
+import { runLinters } from './linterRunner.js';
+import { runFunctionalityTests } from './functionalityTests.js';
+import { runInteractionTests } from './tests/interactionTests.js';
+import { runVisualTest } from './visualTest.js';
+import { runLighthouse } from './lighthouseRunner.js';
+import { calculateScore } from './scoreCalculator.js';
 
 const redisPub = new IORedis({
   host: process.env.REDIS_HOST || 'localhost',
@@ -49,11 +50,11 @@ export async function runEvaluation(submissionId, assignmentId) {
   const { filePath, dir } = await buildPage(submissionId, { html, css: css || '', js: js || '' });
   const fileUrl = `file://${filePath}`;
 
-  let linterResult       = null;
+  let linterResult = null;
   let functionalityResult = null;
-  let interactionResults  = [];
-  let visualResult        = null;
-  let performanceResult   = null;
+  let interactionResults = [];
+  let visualResult = null;
+  let performanceResult = null;
 
   try {
     // ── 2. Linters (no browser needed) ──────────────────────────────────
@@ -112,20 +113,78 @@ export async function runEvaluation(submissionId, assignmentId) {
 
   console.log(`[${submissionId}] Final score: ${breakdown.totalScore}/100`);
 
-  // ── 9. Save to MongoDB ─────────────────────────────────────────────────
+  // ── 9. Look up existing best score for this student+assignment ────────────
+  const studentId = submission.studentId;
+  const existing = await StudentProgress.findOne({ studentId, assignmentId });
+  const prevBest = existing?.bestScore ?? -1;
+  const newScore = breakdown.totalScore;
+  const isBetter = newScore > prevBest;
+
+  console.log(`[${submissionId}] Score: ${newScore} | Prev best: ${prevBest === -1 ? 'none' : prevBest} | Better: ${isBetter}`);
+
+  // Always create the EvaluationRun so the student can fetch their result right now
   await EvaluationRun.create({
     submissionId,
     completedAt: new Date(),
-    totalScore:  breakdown.totalScore,
+    totalScore: newScore,
     breakdown: {
-      linter:        breakdown.linter,
+      linter: breakdown.linter,
       functionality: breakdown.functionality,
-      interaction:   breakdown.interaction,
-      visual:        breakdown.visual,
-      performance:   breakdown.performance
+      interaction: breakdown.interaction,
+      visual: breakdown.visual,
+      performance: breakdown.performance
     }
   });
 
-  // ── 10. Notify via Redis → Socket.IO ──────────────────────────────────
+  // ── 10. Upsert StudentProgress ──────────────────────────────────
+  const now = new Date();
+  const progressUpdate = {
+    $inc: { attempts: 1 },
+    $set: { updatedAt: now }
+  };
+
+  if (isBetter) {
+    progressUpdate.$set.bestScore = newScore;
+    progressUpdate.$set.bestSubmissionId = submissionId;
+    if (newScore >= 50 && !existing?.completed) {
+      progressUpdate.$set.completed = true;
+      progressUpdate.$set.completedAt = now;
+      console.log(`[${submissionId}] Student ${studentId} COMPLETED assignment ${assignmentId} with score ${newScore}`);
+    }
+  }
+
+  await StudentProgress.findOneAndUpdate(
+    { studentId, assignmentId },
+    progressUpdate,
+    { upsert: true, new: true }
+  );
+
+  // ── 11. Notify via Redis → Socket.IO ──────────────────────────────
   await redisPub.publish('eval:done', JSON.stringify({ submissionId }));
+
+  // ── 12. Cleanup — keep only ONE submission record per student per assignment ──
+  // We wait 30 s so the student has time to fetch their result before we delete.
+  setTimeout(async () => {
+    try {
+      if (isBetter) {
+        // New submission is the new best — delete the OLD best's documents
+        if (existing?.bestSubmissionId && existing.bestSubmissionId !== submissionId) {
+          await Promise.all([
+            EvaluationRun.deleteOne({ submissionId: existing.bestSubmissionId }),
+            Submission.deleteOne({ submissionId: existing.bestSubmissionId })
+          ]);
+          console.log(`[cleanup] Deleted old best submission ${existing.bestSubmissionId} (superseded by ${submissionId})`);
+        }
+      } else {
+        // New submission is NOT better — delete THIS submission's documents, old best stays
+        await Promise.all([
+          EvaluationRun.deleteOne({ submissionId }),
+          Submission.deleteOne({ submissionId })
+        ]);
+        console.log(`[cleanup] Deleted non-best submission ${submissionId} (best remains ${existing?.bestSubmissionId})`);
+      }
+    } catch (err) {
+      console.error('[cleanup] Error during submission cleanup:', err.message);
+    }
+  }, 30_000); // 30-second grace period for the student to fetch results
 }

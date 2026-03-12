@@ -2,26 +2,58 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
-import { getAssignments, submitCode, getResult, socket } from '../api/index.js';
+import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, socket } from '../api/index.js';
 
-function AssignmentCard({ a, onStart }) {
+function AssignmentCard({ a, progress, onStart }) {
+  const p = progress[a._id];
+  const isCompleted = p?.completed;
+  const hasTried = p?.attempts > 0;
+
   return (
-    <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl overflow-hidden flex flex-col">
+    <div className={`bg-[#1a1a2e] border rounded-xl overflow-hidden flex flex-col transition-colors ${isCompleted ? 'border-[#3fb950]/40' : 'border-[#2a2a4a]'
+      }`}>
       {a.referenceScreenshotUrl && (
-        <img
-          src={a.referenceScreenshotUrl}
-          alt={a.title}
-          className="w-full h-36 object-cover object-top border-b border-[#2a2a4a]"
-        />
+        <div className="relative">
+          <img
+            src={a.referenceScreenshotUrl}
+            alt={a.title}
+            className="w-full h-36 object-cover object-top border-b border-[#2a2a4a]"
+          />
+          {/* Completion / progress badge overlay */}
+          {isCompleted ? (
+            <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#3fb950]/20 border border-[#3fb950]/50 text-[#3fb950] text-[10px] font-bold rounded-full backdrop-blur-sm">
+              ✓ Completed
+            </span>
+          ) : hasTried ? (
+            <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-[10px] font-bold rounded-full backdrop-blur-sm">
+              Best: {p.bestScore}/100
+            </span>
+          ) : null}
+        </div>
       )}
       <div className="p-4 flex flex-col flex-1">
-        <h3 className="font-semibold text-white text-sm mb-1">{a.title}</h3>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-semibold text-white text-sm">{a.title}</h3>
+          {/* Badge when no screenshot */}
+          {!a.referenceScreenshotUrl && isCompleted && (
+            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/40 text-[#3fb950] rounded-full">✓ Completed</span>
+          )}
+          {!a.referenceScreenshotUrl && !isCompleted && hasTried && (
+            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] rounded-full">{p.bestScore}/100</span>
+          )}
+        </div>
         {a.description && <p className="text-xs text-[#666] mb-3 flex-1">{a.description}</p>}
+        {hasTried && (
+          <p className="text-[10px] text-[#555] mb-2">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''} · Best score: <span className={isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}>{p.bestScore}/100</span></p>
+        )}
         <button
           onClick={() => onStart(a)}
-          className="mt-auto w-full py-2 text-xs font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda] transition-colors"
+          className={`mt-auto w-full py-2 text-xs font-semibold rounded-lg transition-colors ${isCompleted
+            ? 'bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/40 hover:bg-[#3fb950]/30'
+            : 'bg-[#2f80ed] text-white hover:bg-[#1a6cda]'
+            }`}
         >
-          Start Assignment
+          {isCompleted ? 'Resubmit' : hasTried ? 'Try Again' : 'Start Assignment'}
         </button>
       </div>
     </div>
@@ -30,31 +62,54 @@ function AssignmentCard({ a, onStart }) {
 
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
-  const [assignments, setAssignments]           = useState([]);
-  const [loadingList, setLoadingList]           = useState(true);
+  const [assignments, setAssignments] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [progress, setProgress] = useState({});  // { [assignmentId]: {...} }
 
   // Submission state
-  const [files, setFiles]           = useState({ html: '', css: '', js: '' });
+  const [files, setFiles] = useState({ html: '', css: '', js: '' });
   const [submissionId, setSubmissionId] = useState(null);
-  const [status, setStatus]         = useState(null);
-  const [result, setResult]         = useState(null);
+  const [status, setStatus] = useState(null);
+  const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState('');
+  const [loadingCode, setLoadingCode] = useState(false);  // fetching best submission code
+  const [codePrefilled, setCodePrefilled] = useState(false); // true when editor has prev best code
 
   useEffect(() => {
     getAssignments()
       .then(setAssignments)
       .catch(console.error)
       .finally(() => setLoadingList(false));
+    // Also fetch student progress for badges
+    getStudentProgress().then(setProgress).catch(console.error);
   }, []);
 
-  const handleStart = (assignment) => {
+  const handleStart = async (assignment) => {
     setSelectedAssignment(assignment);
     setFiles({ html: '', css: '', js: '' });
     setSubmissionId(null);
     setStatus(null);
     setResult(null);
     setSubmitError('');
+    setCodePrefilled(false);
+
+    // If the student has a previous best submission, load that code into the editor
+    const p = progress[assignment._id];
+    if (p?.attempts > 0) {
+      setLoadingCode(true);
+      try {
+        const bestCode = await getBestCode(assignment._id);
+        if (bestCode.html || bestCode.css || bestCode.js) {
+          setFiles(bestCode);
+          setCodePrefilled(true);
+        }
+      } catch (err) {
+        console.error('Failed to load best code:', err.message);
+      } finally {
+        setLoadingCode(false);
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -77,8 +132,12 @@ export default function StudentDashboard() {
     const handler = async ({ submissionId: doneId }) => {
       if (doneId !== submissionId) return;
       const data = await getResult(doneId);
-      if (data.status === 'done') { setStatus('done'); setResult(data.result); }
-      else setStatus(data.status);
+      if (data.status === 'done') {
+        setStatus('done');
+        setResult(data.result);
+        // Refresh progress badges after evaluation completes
+        getStudentProgress().then(setProgress).catch(console.error);
+      } else setStatus(data.status);
     };
     socket.on('evaluation:complete', handler);
 
@@ -147,7 +206,7 @@ export default function StudentDashboard() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {assignments.map(a => (
-                <AssignmentCard key={a._id} a={a} onStart={handleStart} />
+                <AssignmentCard key={a._id} a={a} progress={progress} onStart={handleStart} />
               ))}
             </div>
           )}
@@ -167,12 +226,34 @@ export default function StudentDashboard() {
               )}
             </div>
 
-            <CodeEditor files={files} onChange={handleFileChange} />
+            {/* Loading spinner while fetching best code */}
+            {loadingCode ? (
+              <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
+                <div className="flex flex-col items-center gap-3 text-[#555]">
+                  <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                  <p className="text-xs">Loading your best submission…</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Banner: editor pre-filled with best code */}
+                {codePrefilled && (
+                  <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-[#3fb950]/10 border-b border-[#3fb950]/20">
+                    <div className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#3fb950]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      <span className="text-xs text-[#3fb950] font-semibold">Loaded from your best submission — edit and resubmit to improve your score</span>
+                    </div>
+                    <button onClick={() => setCodePrefilled(false)} className="text-[#3fb950]/60 hover:text-[#3fb950] text-xs">✕</button>
+                  </div>
+                )}
+                <CodeEditor files={files} onChange={handleFileChange} />
+              </>
+            )}
 
             <div className="shrink-0 px-3 py-2 bg-[#0f0f1a]">
               <button
                 onClick={handleSubmit}
-                disabled={isEvaluating}
+                disabled={isEvaluating || loadingCode}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-md text-sm font-semibold transition-colors
                            bg-[#2f80ed] text-white hover:bg-[#1a6cda]
                            disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed"

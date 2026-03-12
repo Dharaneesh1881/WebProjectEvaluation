@@ -9,6 +9,7 @@ import submissionsRouter from './routes/submissions.js';
 import authRouter from './routes/auth.js';
 import assignmentsRouter from './routes/assignments.js';
 import uploadsRouter from './routes/uploads.js';
+import progressRouter from './routes/progress.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,6 +30,7 @@ app.use('/api', submissionsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api', uploadsRouter);
+app.use('/api', progressRouter);
 
 // Subscribe to Redis pub/sub to receive worker notifications
 const redisSub = new IORedis({

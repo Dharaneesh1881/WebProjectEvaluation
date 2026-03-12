@@ -244,8 +244,9 @@ function SubmissionsView({ assignment, onBack }) {
             <thead>
               <tr className="border-b border-[#2a2a4a] text-left text-xs text-[#666]">
                 <th className="pb-2 pr-4 font-semibold">Student ID</th>
-                <th className="pb-2 pr-4 font-semibold">Status</th>
-                <th className="pb-2 pr-4 font-semibold">Total</th>
+                <th className="pb-2 pr-4 font-semibold">Completed</th>
+                <th className="pb-2 pr-4 font-semibold">Attempts</th>
+                <th className="pb-2 pr-4 font-semibold">Best Score</th>
                 <th className="pb-2 pr-4 font-semibold">Linter/10</th>
                 <th className="pb-2 pr-4 font-semibold">Func/40</th>
                 <th className="pb-2 pr-4 font-semibold">Interact/15</th>
@@ -256,18 +257,19 @@ function SubmissionsView({ assignment, onBack }) {
             <tbody>
               {submissions.map(s => {
                 const r = s.result;
-                const scoreColor = r?.totalScore >= 80 ? 'text-[#3fb950]' : r?.totalScore >= 50 ? 'text-[#f0a500]' : 'text-[#f85149]';
+                const scoreColor = s.bestScore >= 80 ? 'text-[#3fb950]' : s.bestScore >= 50 ? 'text-[#f0a500]' : 'text-[#f85149]';
                 return (
-                  <tr key={s.submissionId} className="border-b border-[#1a1a2e] hover:bg-[#1a1a2e]">
+                  <tr key={s.submissionId ?? s.studentId} className="border-b border-[#1a1a2e] hover:bg-[#1a1a2e]">
                     <td className="py-2 pr-4 text-[#888] font-mono text-xs">{s.studentId?.slice(0, 8)}…</td>
                     <td className="py-2 pr-4">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.status === 'done' ? 'bg-[#3fb950]/10 text-[#3fb950]' :
-                        s.status === 'error' ? 'bg-[#f85149]/10 text-[#f85149]' :
-                          s.status === 'processing' ? 'bg-[#f0a500]/10 text-[#f0a500]' :
-                            'bg-[#2a2a4a] text-[#666]'
-                        }`}>{s.status}</span>
+                      {s.completed ? (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#3fb950]/10 text-[#3fb950]">✓ Done</span>
+                      ) : (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#2a2a4a] text-[#666]">In progress</span>
+                      )}
                     </td>
-                    <td className={`py-2 pr-4 font-bold ${scoreColor}`}>{r ? `${r.totalScore}/100` : '—'}</td>
+                    <td className="py-2 pr-4 text-[#888] text-xs">{s.attempts ?? 1}</td>
+                    <td className={`py-2 pr-4 font-bold ${scoreColor}`}>{s.bestScore ?? r?.totalScore ?? '—'}/100</td>
                     <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.linter?.score ?? '—'}` : '—'}</td>
                     <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.functionality?.score ?? '—'}` : '—'}</td>
                     <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.interaction?.score ?? '—'}` : '—'}</td>
