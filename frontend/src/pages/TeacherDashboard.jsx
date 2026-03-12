@@ -1,35 +1,100 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
-import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests } from '../api/index.js';
+import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment } from '../api/index.js';
 
-function AssignmentCard({ a, onViewSubmissions, onEditTests }) {
+function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isDeleting = deletingId === a._id;
+
   return (
-    <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl overflow-hidden">
+    <div className={`bg-[#1a1a2e] border rounded-xl overflow-hidden transition-all duration-200 ${isDeleting ? 'border-[#f85149]/50 opacity-60' : 'border-[#2a2a4a]'
+      }`}>
       {a.referenceScreenshotUrl && (
-        <img
-          src={a.referenceScreenshotUrl}
-          alt={a.title}
-          className="w-full h-32 object-cover object-top border-b border-[#2a2a4a]"
-        />
+        <div className="relative">
+          <img
+            src={a.referenceScreenshotUrl}
+            alt={a.title}
+            className="w-full h-32 object-cover object-top border-b border-[#2a2a4a]"
+          />
+          {/* Trash icon top-right */}
+          {!confirmDelete && !isDeleting && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Delete assignment"
+              className="absolute top-2 right-2 p-1.5 rounded-lg bg-[#0d0d1a]/80 text-[#f85149] hover:bg-[#f85149]/20 transition-colors backdrop-blur-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          )}
+        </div>
       )}
       <div className="p-4">
-        <h3 className="font-semibold text-white text-sm mb-1">{a.title}</h3>
-        {a.description && <p className="text-xs text-[#666] mb-3 line-clamp-2">{a.description}</p>}
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => onViewSubmissions(a)}
-            className="flex-1 py-1.5 text-xs font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda] transition-colors"
-          >
-            View Submissions
-          </button>
-          <button
-            onClick={() => onEditTests(a)}
-            className="flex-1 py-1.5 text-xs font-semibold bg-[#1a1a2e] text-[#4e9af1] border border-[#4e9af1]/40 rounded-lg hover:border-[#4e9af1] transition-colors"
-          >
-            Edit Tests
-          </button>
+        {/* Title row with trash icon (when no screenshot) */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-semibold text-white text-sm">{a.title}</h3>
+          {!a.referenceScreenshotUrl && !confirmDelete && !isDeleting && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Delete assignment"
+              className="shrink-0 p-1 rounded-lg text-[#555] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          )}
         </div>
+
+        {a.description && <p className="text-xs text-[#666] mb-3 line-clamp-2">{a.description}</p>}
+
+        {/* Confirm delete banner */}
+        {confirmDelete ? (
+          <div className="mt-3 p-3 bg-[#f85149]/10 border border-[#f85149]/30 rounded-lg">
+            <p className="text-xs text-[#f85149] font-semibold mb-1">Delete this assignment?</p>
+            <p className="text-[10px] text-[#888] mb-3">All student submissions and evaluation data will be permanently removed.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { onDelete(a._id); setConfirmDelete(false); }}
+                disabled={isDeleting}
+                className="flex-1 py-1.5 text-xs font-bold bg-[#f85149] text-white rounded-lg hover:bg-[#e03131] transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 py-1.5 text-xs font-semibold bg-[#1a1a2e] text-[#888] border border-[#2a2a4a] rounded-lg hover:border-[#444] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => onViewSubmissions(a)}
+              disabled={isDeleting}
+              className="flex-1 py-1.5 text-xs font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda] transition-colors disabled:opacity-40"
+            >
+              View Submissions
+            </button>
+            <button
+              onClick={() => onEditTests(a)}
+              disabled={isDeleting}
+              className="flex-1 py-1.5 text-xs font-semibold bg-[#1a1a2e] text-[#4e9af1] border border-[#4e9af1]/40 rounded-lg hover:border-[#4e9af1] transition-colors disabled:opacity-40"
+            >
+              Edit Tests
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -65,10 +130,10 @@ const EDIT_TESTS_PLACEHOLDER = `{
 }`;
 
 function EditTestsView({ assignment, onBack }) {
-  const [json, setJson]         = useState('');
+  const [json, setJson] = useState('');
   const [jsonError, setJsonError] = useState('');
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(null);
   const [saveError, setSaveError] = useState('');
 
   const handleSave = async (e) => {
@@ -86,7 +151,7 @@ function EditTestsView({ assignment, onBack }) {
 
     const payload = {};
     if (Array.isArray(parsed.functionalityTests)) payload.functionalityTests = parsed.functionalityTests;
-    if (Array.isArray(parsed.interactionTests))   payload.interactionTests   = parsed.interactionTests;
+    if (Array.isArray(parsed.interactionTests)) payload.interactionTests = parsed.interactionTests;
 
     if (!Object.keys(payload).length) {
       setJsonError('JSON must have "functionalityTests" and/or "interactionTests" arrays.');
@@ -150,7 +215,7 @@ function EditTestsView({ assignment, onBack }) {
 
 function SubmissionsView({ assignment, onBack }) {
   const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getAssignmentSubmissions(assignment._id)
@@ -196,12 +261,11 @@ function SubmissionsView({ assignment, onBack }) {
                   <tr key={s.submissionId} className="border-b border-[#1a1a2e] hover:bg-[#1a1a2e]">
                     <td className="py-2 pr-4 text-[#888] font-mono text-xs">{s.studentId?.slice(0, 8)}…</td>
                     <td className="py-2 pr-4">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        s.status === 'done'       ? 'bg-[#3fb950]/10 text-[#3fb950]' :
-                        s.status === 'error'      ? 'bg-[#f85149]/10 text-[#f85149]' :
-                        s.status === 'processing' ? 'bg-[#f0a500]/10 text-[#f0a500]' :
-                        'bg-[#2a2a4a] text-[#666]'
-                      }`}>{s.status}</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.status === 'done' ? 'bg-[#3fb950]/10 text-[#3fb950]' :
+                        s.status === 'error' ? 'bg-[#f85149]/10 text-[#f85149]' :
+                          s.status === 'processing' ? 'bg-[#f0a500]/10 text-[#f0a500]' :
+                            'bg-[#2a2a4a] text-[#666]'
+                        }`}>{s.status}</span>
                     </td>
                     <td className={`py-2 pr-4 font-bold ${scoreColor}`}>{r ? `${r.totalScore}/100` : '—'}</td>
                     <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.linter?.score ?? '—'}` : '—'}</td>
@@ -222,19 +286,20 @@ function SubmissionsView({ assignment, onBack }) {
 
 export default function TeacherDashboard() {
   const { user, logout } = useAuth();
-  const [view, setView]               = useState('list');  // 'list' | 'create' | 'submissions' | 'editTests'
+  const [view, setView] = useState('list');  // 'list' | 'create' | 'submissions' | 'editTests'
   const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading] = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Create form state
-  const [form, setForm]         = useState({ title: '', description: '' });
-  const [files, setFiles]       = useState({ html: '', css: '', js: '' });
-  const [testsJson, setTestsJson]       = useState('');
+  const [form, setForm] = useState({ title: '', description: '' });
+  const [files, setFiles] = useState({ html: '', css: '', js: '' });
+  const [testsJson, setTestsJson] = useState('');
   const [testsJsonError, setTestsJsonError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState(null);
-  const [createError, setCreateError]   = useState('');
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     if (view === 'list') {
@@ -246,6 +311,18 @@ export default function TeacherDashboard() {
     }
   }, [view]);
 
+  const handleDelete = async (assignmentId) => {
+    setDeletingId(assignmentId);
+    try {
+      await deleteAssignment(assignmentId);
+      setAssignments(prev => prev.filter(a => a._id !== assignmentId));
+    } catch (err) {
+      console.error('Delete failed:', err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.title || !files.html) {
@@ -255,12 +332,12 @@ export default function TeacherDashboard() {
 
     // Parse tests JSON if provided
     let functionalityTests = [];
-    let interactionTests   = [];
+    let interactionTests = [];
     if (testsJson.trim()) {
       try {
         const parsed = JSON.parse(testsJson.trim());
         functionalityTests = Array.isArray(parsed.functionalityTests) ? parsed.functionalityTests : [];
-        interactionTests   = Array.isArray(parsed.interactionTests)   ? parsed.interactionTests   : [];
+        interactionTests = Array.isArray(parsed.interactionTests) ? parsed.interactionTests : [];
         setTestsJsonError('');
       } catch {
         setTestsJsonError('Invalid JSON — check the tests format.');
@@ -339,6 +416,8 @@ export default function TeacherDashboard() {
                     a={a}
                     onViewSubmissions={(assignment) => { setSelectedAssignment(assignment); setView('submissions'); }}
                     onEditTests={(assignment) => { setSelectedAssignment(assignment); setView('editTests'); }}
+                    onDelete={handleDelete}
+                    deletingId={deletingId}
                   />
                 ))}
               </div>
@@ -359,10 +438,10 @@ export default function TeacherDashboard() {
                 <p className="text-[#3fb950] font-semibold text-sm mb-3">Assignment created successfully!</p>
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   {[
-                    ['DOM tests (auto)',    createResult.testsGenerated?.dom],
-                    ['Style tests (auto)',  createResult.testsGenerated?.style],
+                    ['DOM tests (auto)', createResult.testsGenerated?.dom],
+                    ['Style tests (auto)', createResult.testsGenerated?.style],
                     ['Functionality tests', createResult.testsGenerated?.functionality],
-                    ['Interaction tests',   createResult.testsGenerated?.interaction],
+                    ['Interaction tests', createResult.testsGenerated?.interaction],
                   ].map(([label, val]) => (
                     <p key={label} className="text-sm text-[#888]">
                       {label}: <span className="text-white font-semibold">{val ?? 0}</span>
@@ -416,7 +495,7 @@ export default function TeacherDashboard() {
                 <div>
                   <label className="block text-xs font-semibold text-[#888] mb-1.5">Reference code *</label>
                   <p className="text-xs text-[#555] mb-2">Paste the original/reference HTML, CSS, and JS. Tests will be auto-generated from this.</p>
-                  <div className="h-[400px] border border-[#2a2a4a] rounded-xl overflow-hidden">
+                  <div className="h-[400px] flex flex-col border border-[#2a2a4a] rounded-xl overflow-hidden">
                     <CodeEditor files={files} onChange={(tab, val) => setFiles(f => ({ ...f, [tab]: val }))} />
                   </div>
                 </div>

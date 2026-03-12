@@ -77,6 +77,14 @@ export async function updateAssignmentTests(assignmentId, { functionalityTests, 
   return handleResponse(res);
 }
 
+export async function deleteAssignment(assignmentId) {
+  const res = await fetch(`${API_BASE}/assignments/${assignmentId}`, {
+    method: 'DELETE',
+    headers: authHeaders()
+  });
+  return handleResponse(res);  // { success, message, deletedSubmissions }
+}
+
 export async function getAssignmentSubmissions(assignmentId) {
   const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
     headers: authHeaders()
