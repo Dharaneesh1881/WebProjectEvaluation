@@ -24,10 +24,11 @@ export function CodeEditor({ files, onChange, readOnly = false }) {
         {TABS.map(t => (
           <button
             key={t}
+            type="button"
             onClick={() => setActiveTab(t)}
             className={`px-4 py-2.5 text-xs font-semibold font-mono tracking-wider border-b-2 transition-colors ${activeTab === t
-                ? `border-[#4e9af1] bg-[#1a1a2e] ${TAB_COLORS[t]}`
-                : 'border-transparent text-[#666] hover:bg-[#1a1a2e] hover:text-[#bbb]'
+              ? `border-[#4e9af1] bg-[#1a1a2e] ${TAB_COLORS[t]}`
+              : 'border-transparent text-[#666] hover:bg-[#1a1a2e] hover:text-[#bbb]'
               }`}
           >
             {t.toUpperCase()}

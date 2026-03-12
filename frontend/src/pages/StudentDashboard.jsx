@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
-import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiCode } from 'react-icons/fi';
+import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
 function StudentLeaderboardView({ currentUser, onBack }) {
@@ -181,31 +181,24 @@ function AssignmentCard({ a, progress, onStart }) {
   const hasTried = p?.attempts > 0;
 
   return (
-    <div className={`bg-[#1a1a2e] border rounded-xl overflow-hidden flex flex-col transition-colors ${isCompleted ? 'border-[#3fb950]/40' : 'border-[#2a2a4a]'
-      }`}>
+    <div className={`bg-[#1a1a2e] border rounded-xl overflow-hidden flex flex-col transition-colors ${isCompleted ? 'border-[#3fb950]/40' : 'border-[#2a2a4a]'}`}>
       {a.referenceScreenshotUrl && (
         <div className="relative">
-          <img
-            src={a.referenceScreenshotUrl}
-            alt={a.title}
-            className="w-full h-36 object-cover object-top border-b border-[#2a2a4a]"
-          />
-          {/* Completion / progress badge overlay */}
+          <img src={a.referenceScreenshotUrl} alt={a.title} className="w-full h-36 object-cover object-top border-b border-[#2a2a4a]" />
           {isCompleted ? (
             <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#3fb950]/20 border border-[#3fb950]/50 text-[#3fb950] text-[10px] font-bold rounded-full backdrop-blur-sm">
-              <span className="inline-flex items-center gap-1"><MdCheckCircle size={12} /> Completed</span>
+              <MdCheckCircle size={12} /> Completed
             </span>
           ) : hasTried ? (
-            <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-[10px] font-bold rounded-full backdrop-blur-sm">
+            <span className="absolute top-2 right-2 px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-[10px] font-bold rounded-full backdrop-blur-sm">
               Best: {p.bestScore}/100
             </span>
           ) : null}
         </div>
       )}
       <div className="p-4 flex flex-col flex-1">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <h3 className="font-semibold text-white text-sm">{a.title}</h3>
-          {/* Badge when no screenshot */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <h3 className="font-semibold text-white text-sm leading-snug">{a.title}</h3>
           {!a.referenceScreenshotUrl && isCompleted && (
             <span className="inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/40 text-[#3fb950] rounded-full">
               <MdCheckCircle size={10} /> Completed
@@ -215,11 +208,11 @@ function AssignmentCard({ a, progress, onStart }) {
             <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] rounded-full">{p.bestScore}/100</span>
           )}
         </div>
-        {a.description && <p className="text-xs text-[#666] mb-3 flex-1">{a.description}</p>}
         {hasTried && (
-          <p className="text-[10px] text-[#555] mb-2">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''} · Best score: <span className={isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}>{p.bestScore}/100</span></p>
+          <p className="text-[10px] text-[#555] mb-3">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''} · Best: <span className={isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}>{p.bestScore}/100</span></p>
         )}
         <button
+          type="button"
           onClick={() => onStart(a)}
           className={`mt-auto w-full py-2 text-xs font-semibold rounded-lg transition-colors ${isCompleted
             ? 'bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/40 hover:bg-[#3fb950]/30'
@@ -247,8 +240,10 @@ export default function StudentDashboard() {
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState('');
-  const [loadingCode, setLoadingCode] = useState(false);  // fetching best submission code
-  const [codePrefilled, setCodePrefilled] = useState(false); // true when editor has prev best code
+  const [loadingCode, setLoadingCode] = useState(false);
+  const [codePrefilled, setCodePrefilled] = useState(false);
+  const [showResults, setShowResults] = useState(false); // results slide-in overlay
+  const [infoTab, setInfoTab] = useState('description');  // LeetCode-style panel tab
 
   useEffect(() => {
     getAssignments()
@@ -267,6 +262,8 @@ export default function StudentDashboard() {
     setResult(null);
     setSubmitError('');
     setCodePrefilled(false);
+    setShowResults(false);
+    setInfoTab('description'); // reset panel tab
 
     // If the student has a previous best submission, load that code into the editor
     const p = progress[assignment._id];
@@ -291,6 +288,7 @@ export default function StudentDashboard() {
     setResult(null);
     setSubmissionId(null);
     setStatus('pending');
+    setShowResults(false);
     try {
       const { submissionId: id } = await submitCode({ ...files, assignmentId: selectedAssignment._id });
       setSubmissionId(id);
@@ -309,7 +307,7 @@ export default function StudentDashboard() {
       if (data.status === 'done') {
         setStatus('done');
         setResult(data.result);
-        // Refresh progress badges after evaluation completes
+        setShowResults(true); // auto-open results panel
         getStudentProgress().then(setProgress).catch(console.error);
       } else setStatus(data.status);
     };
@@ -323,6 +321,7 @@ export default function StudentDashboard() {
           clearInterval(poll);
           setStatus('done');
           setResult(data.result);
+          setShowResults(true); // auto-open results panel
         }
       } catch { /* ignore, keep polling */ }
     }, 3000);
@@ -339,27 +338,31 @@ export default function StudentDashboard() {
 
   const isEvaluating = status === 'pending' || status === 'processing';
   const activeView = selectedAssignment ? 'editor' : view;
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0] flex">
 
       {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-56 shrink-0 bg-[#0d0d1a] border-r border-[#2a2a4a] flex flex-col min-h-screen sticky top-0 h-screen">
+      <aside
+        className="shrink-0 bg-[#0d0d1a] border-r border-[#2a2a4a] flex flex-col min-h-screen sticky top-0 h-screen overflow-hidden transition-all duration-300"
+        style={{ width: sidebarOpen ? '224px' : '48px' }}
+      >
         {/* Brand */}
-        <div className="px-5 py-5 border-b border-[#2a2a4a]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#2f80ed]/30 to-[#4e9af1]/10 border border-[#2f80ed]/30 flex items-center justify-center">
+        <div className="px-3 py-4 border-b border-[#2a2a4a] shrink-0">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-[#2f80ed]/30 to-[#4e9af1]/10 border border-[#2f80ed]/30 flex items-center justify-center">
               <FiCode size={14} className="text-[#4e9af1]" />
             </div>
-            <div>
-              <p className="text-white text-sm font-bold leading-tight">Student</p>
+            <div className={`overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
+              <p className="text-white text-sm font-bold leading-tight whitespace-nowrap">Student</p>
               <p className="text-[#444] text-[10px] truncate max-w-[100px]">{user?.name}</p>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-1.5 py-3 space-y-1 overflow-hidden">
           {[
             { id: 'list', icon: FiList, label: 'Assignments' },
             { id: 'leaderboard', icon: FiBarChart2, label: 'Leaderboard' },
@@ -367,19 +370,22 @@ export default function StudentDashboard() {
             <button
               key={item.id}
               onClick={() => { setSelectedAssignment(null); setView(item.id); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeView === item.id
+              title={!sidebarOpen ? item.label : undefined}
+              className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeView === item.id
                 ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
                 : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
                 }`}
             >
-              <item.icon size={16} />
-              {item.label}
-              {activeView === item.id && <FiChevronRight size={12} className="ml-auto" />}
+              <item.icon size={16} className="shrink-0" />
+              <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${sidebarOpen ? 'opacity-100 max-w-[160px]' : 'opacity-0 max-w-0'}`}>
+                {item.label}
+              </span>
+              {sidebarOpen && activeView === item.id && <FiChevronRight size={12} className="ml-auto shrink-0" />}
             </button>
           ))}
 
           {/* Shown when inside a specific assignment */}
-          {selectedAssignment && (
+          {selectedAssignment && sidebarOpen && (
             <>
               <div className="border-t border-[#2a2a4a] my-2" />
               <div className="px-3 py-2">
@@ -388,23 +394,35 @@ export default function StudentDashboard() {
               </div>
               <button
                 onClick={() => setSelectedAssignment(null)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
+                className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
               >
-                <FiArrowLeft size={16} />
-                All Assignments
+                <FiArrowLeft size={16} className="shrink-0" />
+                <span className="overflow-hidden whitespace-nowrap">All Assignments</span>
               </button>
             </>
+          )}
+          {selectedAssignment && !sidebarOpen && (
+            <button
+              onClick={() => setSelectedAssignment(null)}
+              title="All Assignments"
+              className="w-full flex items-center justify-center px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
+            >
+              <FiArrowLeft size={16} />
+            </button>
           )}
         </nav>
 
         {/* Sign out */}
-        <div className="px-3 pb-5">
+        <div className="px-1.5 pb-4 shrink-0">
           <button
             onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
+            title={!sidebarOpen ? 'Sign Out' : undefined}
+            className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
           >
-            <FiLogOut size={16} />
-            Sign Out
+            <FiLogOut size={16} className="shrink-0" />
+            <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${sidebarOpen ? 'opacity-100 max-w-[160px]' : 'opacity-0 max-w-0'}`}>
+              Sign Out
+            </span>
           </button>
         </div>
       </aside>
@@ -413,13 +431,22 @@ export default function StudentDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top bar */}
-        <header className="bg-[#0d0d1a] border-b border-[#2a2a4a] px-8 py-3 sticky top-0 z-10">
+        <header className="bg-[#0d0d1a] border-b border-[#2a2a4a] px-4 py-3 sticky top-0 z-10 flex items-center gap-3">
+          {/* Sidebar toggle */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-[#555] hover:text-[#bbb] hover:bg-[#1a1a2e] transition-all shrink-0"
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {sidebarOpen ? <FiChevronLeft size={16} /> : <FiMenu size={16} />}
+          </button>
           <h1 className="font-bold text-white text-sm">
             {selectedAssignment ? selectedAssignment.title
               : view === 'leaderboard' ? 'Leaderboard'
                 : 'Available Assignments'}
           </h1>
         </header>
+
 
         {/* ─ Leaderboard view ─ */}
         {!selectedAssignment && view === 'leaderboard' && (
@@ -449,64 +476,243 @@ export default function StudentDashboard() {
         )}
 
         {/* ─ Submission / Editor view ─ */}
-        {selectedAssignment && (
-          <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-            {/* Editor column */}
-            <section className="flex flex-col md:w-[55%] border-b md:border-b-0 md:border-r border-[#2a2a4a] h-[55vh] md:h-auto">
-              <div className="px-4 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] shrink-0">
-                <p className="text-xs text-[#666]">Assignment</p>
-                <h3 className="text-sm font-semibold text-white">{selectedAssignment.title}</h3>
-                {selectedAssignment.description && (
-                  <p className="text-xs text-[#555] mt-0.5">{selectedAssignment.description}</p>
+        {selectedAssignment && (() => {
+          const p = progress[selectedAssignment._id];
+          const isCompleted = p?.completed;
+          return (
+            <div className="flex flex-1 overflow-hidden">
+
+              {/* ── LEFT: Problem Panel (LeetCode-style) ── */}
+              {(() => {
+                return (
+                  <aside
+                    className="shrink-0 flex flex-col overflow-hidden border-r border-[#2a2a4a]"
+                    style={{ width: '380px', background: '#0f0f1a' }}
+                  >
+                    {/* ── Tab Bar ── */}
+                    <div className="shrink-0 flex items-center gap-1 px-2 border-b border-[#2a2a4a]" style={{ background: '#0d0d1f' }}>
+                      {[
+                        { key: 'description', label: 'Description' },
+                        { key: 'progress', label: p?.attempts > 0 ? `Progress (${p.attempts})` : 'Progress' },
+                      ].map(tab => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setInfoTab(tab.key)}
+                          className={`px-3 py-2.5 text-[13px] font-medium transition-colors border-b-2 -mb-px ${infoTab === tab.key
+                              ? 'border-[#4e9af1] text-white'
+                              : 'border-transparent text-[#555] hover:text-[#888]'
+                            }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ── Description Tab ── */}
+                    {infoTab === 'description' && (
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="px-6 pt-5 pb-8">
+
+                          {/* Title — large like LeetCode */}
+                          <h2 className="text-xl font-bold text-white mb-4 leading-tight">
+                            {selectedAssignment.title}
+                          </h2>
+
+                          {/* Reference image — small inline thumbnail */}
+                          {selectedAssignment.referenceScreenshotUrl && (
+                            <div className="mb-5">
+                              <div className="relative inline-block w-full overflow-hidden rounded-lg border border-[#2a2a4a] group" style={{ maxHeight: '180px' }}>
+                                <img
+                                  src={selectedAssignment.referenceScreenshotUrl}
+                                  alt="Reference design"
+                                  className="w-full object-cover object-top"
+                                  style={{ maxHeight: '180px' }}
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-end p-2.5 opacity-0 group-hover:opacity-100">
+                                  <a
+                                    href={selectedAssignment.referenceScreenshotUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-semibold text-white bg-black/60 px-2.5 py-1 rounded-md hover:bg-black/80"
+                                  >
+                                    View full size ↗
+                                  </a>
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-[#444] mt-1.5">Reference design</p>
+                            </div>
+                          )}
+
+                          {/* Description body — clean prose, no card */}
+                          {selectedAssignment.description ? (
+                            <div
+                              className="text-sm text-[#b0b0b0] leading-[1.8] whitespace-pre-line"
+                              style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}
+                            >
+                              {selectedAssignment.description}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-[#444] italic">No description provided.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Progress Tab ── */}
+                    {infoTab === 'progress' && (
+                      <div className="flex-1 overflow-y-auto px-6 py-6">
+                        {p?.attempts > 0 ? (
+                          <div className="flex flex-col gap-6">
+                            {/* Score hero */}
+                            <div className="text-center py-4">
+                              <p className="text-[11px] text-[#555] uppercase tracking-wider mb-1">Best Score</p>
+                              <p className={`text-4xl font-black ${isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}`}>
+                                {p.bestScore}
+                                <span className="text-xl text-[#444] font-normal">/100</span>
+                              </p>
+                              <p className={`text-xs font-semibold mt-1 ${isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}`}>
+                                {isCompleted ? '✓ Completed' : 'In Progress'}
+                              </p>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div>
+                              <div className="w-full bg-[#1a1a2e] rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-700"
+                                  style={{ width: `${p.bestScore}%`, background: isCompleted ? '#3fb950' : '#f0a500' }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="flex flex-col gap-3">
+                              {[
+                                { label: 'Submissions', value: p.attempts },
+                                { label: 'Best Score', value: `${p.bestScore}/100` },
+                                { label: 'Status', value: isCompleted ? 'Completed' : 'In Progress' },
+                              ].map(row => (
+                                <div key={row.label} className="flex justify-between items-center border-b border-[#1a1a2e] pb-3">
+                                  <span className="text-sm text-[#555]">{row.label}</span>
+                                  <span className={`text-sm font-semibold ${row.label === 'Status' ? (isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]') : 'text-white'}`}>
+                                    {row.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <p className="text-xs text-[#444] leading-relaxed">
+                              Resubmit anytime — only your best score is saved.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
+                            <p className="text-[#555] text-sm font-medium">No submissions yet</p>
+                            <p className="text-[#333] text-xs">Write your solution and hit Submit.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </aside>
+                );
+              })()}
+
+
+
+
+              {/* ── RIGHT: Code Editor + Results Overlay ── */}
+              <div className="flex-1 flex flex-col relative overflow-hidden">
+
+                {/* Best-code prefilled banner */}
+                {codePrefilled && (
+                  <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-[#3fb950]/10 border-b border-[#3fb950]/20 z-10">
+                    <div className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#3fb950]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      <span className="text-xs text-[#3fb950] font-semibold">Loaded from your best submission — edit and resubmit to improve your score</span>
+                    </div>
+                    <button onClick={() => setCodePrefilled(false)} className="text-[#3fb950]/60 hover:text-[#3fb950] text-xs">✕</button>
+                  </div>
+                )}
+
+                {/* Loading code spinner */}
+                {loadingCode ? (
+                  <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
+                    <div className="flex flex-col items-center gap-3 text-[#555]">
+                      <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                      <p className="text-xs">Loading your best submission…</p>
+                    </div>
+                  </div>
+                ) : (
+                  <CodeEditor files={files} onChange={handleFileChange} />
+                )}
+
+                {/* Submit bar */}
+                <div className="shrink-0 px-4 py-3 bg-[#0a0a16] border-t border-[#2a2a4a] flex items-center gap-4">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isEvaluating || loadingCode}
+                    className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-all bg-[#2f80ed] text-white hover:bg-[#1a6cda] shadow-[0_0_20px_rgba(47,128,237,0.25)] disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed disabled:shadow-none"
+                  >
+                    {isEvaluating ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin inline-block" />
+                        Evaluating…
+                      </span>
+                    ) : 'Submit for Evaluation'}
+                  </button>
+                  {submitError && <p className="text-xs text-[#f85149]">{submitError}</p>}
+                  {status === 'pending' || status === 'processing' ? (
+                    <p className="text-xs text-[#888] ml-auto">Running tests… please wait</p>
+                  ) : status === 'done' && result ? (
+                    <button
+                      onClick={() => setShowResults(true)}
+                      className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] text-xs font-semibold rounded-lg hover:bg-[#3fb950]/20 transition-all animate-pulse"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                      View Results — {result.totalScore}/100
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* ── Results Slide-in Overlay ── */}
+                {showResults && status === 'done' && result && (
+                  <div className="absolute inset-0 z-20 flex pointer-events-none">
+                    {/* Dim backdrop on left to hint code is underneath */}
+                    <div
+                      className="flex-1 bg-black/40 pointer-events-auto"
+                      onClick={() => setShowResults(false)}
+                    />
+                    {/* Results panel slides in from right */}
+                    <div className="w-[55%] max-w-xl bg-[#0d0d1a] border-l border-[#2a2a4a] flex flex-col overflow-hidden pointer-events-auto shadow-2xl"
+                      style={{ animation: 'slideInRight 0.25s ease-out' }}>
+                      {/* Panel header */}
+                      <div className="flex items-center justify-between px-5 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] shrink-0">
+                        <div className="flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[#4e9af1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                          <span className="text-sm font-bold text-white">Evaluation Results</span>
+                          <span className={`ml-1 text-xs font-black px-2 py-0.5 rounded-full ${result.totalScore >= 50 ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#f85149]/20 text-[#f85149]'}`}>
+                            {result.totalScore}/100
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setShowResults(false)}
+                          className="w-7 h-7 rounded-lg bg-[#2a2a4a] hover:bg-[#3a3a5a] text-[#888] hover:text-white flex items-center justify-center text-xs transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {/* Results content */}
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <ResultsPanel status={status} result={result} />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              {loadingCode ? (
-                <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
-                  <div className="flex flex-col items-center gap-3 text-[#555]">
-                    <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
-                    <p className="text-xs">Loading your best submission…</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {codePrefilled && (
-                    <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-[#3fb950]/10 border-b border-[#3fb950]/20">
-                      <div className="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#3fb950]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        <span className="text-xs text-[#3fb950] font-semibold">Loaded from your best submission — edit and resubmit to improve your score</span>
-                      </div>
-                      <button onClick={() => setCodePrefilled(false)} className="text-[#3fb950]/60 hover:text-[#3fb950] text-xs">✕</button>
-                    </div>
-                  )}
-                  <CodeEditor files={files} onChange={handleFileChange} />
-                </>
-              )}
-
-              <div className="shrink-0 px-3 py-2 bg-[#0f0f1a]">
-                <button
-                  onClick={handleSubmit}
-                  disabled={isEvaluating || loadingCode}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-md text-sm font-semibold transition-colors bg-[#2f80ed] text-white hover:bg-[#1a6cda] disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed"
-                >
-                  {isEvaluating ? 'Evaluating…' : 'Submit for Evaluation'}
-                </button>
-                {submitError && <p className="mt-1.5 text-xs text-[#f85149]">{submitError}</p>}
-              </div>
-            </section>
-
-            {/* Results column */}
-            <section className="flex-1 overflow-y-auto p-4">
-              {status ? (
-                <ResultsPanel status={status} result={result} />
-              ) : (
-                <div className="flex items-center justify-center h-full text-[#555] text-sm text-center px-4">
-                  <p>Your evaluation results will appear here after submission.</p>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
