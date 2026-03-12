@@ -119,3 +119,8 @@ export async function getBestCode(assignmentId) {
   const res = await fetch(`${API_BASE}/progress/${assignmentId}/code`, { headers: authHeaders() });
   return handleResponse(res);  // { html, css, js }
 }
+
+export async function getLeaderboard() {
+  const res = await fetch(`${API_BASE}/leaderboard`, { headers: authHeaders() });
+  return handleResponse(res);  // [{ assignmentId, title, totalStudents, completedCount, avgScore, students: [{rank, name, email, bestScore, completed, attempts}] }]
+}

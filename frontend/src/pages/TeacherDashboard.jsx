@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
-import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment } from '../api/index.js';
+import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard } from '../api/index.js';
 
 function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -213,6 +213,154 @@ function EditTestsView({ assignment, onBack }) {
   );
 }
 
+function LeaderboardView({ onBack }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
+
+  const fetchData = () => {
+    setLoading(true);
+    getLeaderboard()
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const assignment = data[activeTab];
+
+  const medalColor = (rank) =>
+    rank === 1 ? 'text-[#f0c040]' :
+      rank === 2 ? 'text-[#b0b8c8]' :
+        rank === 3 ? 'text-[#cd7f32]' : 'text-[#555]';
+
+  const medalIcon = (rank) =>
+    rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
+        <h2 className="text-xl font-bold text-white">Student Leaderboard</h2>
+        <button onClick={fetchData} className="ml-auto text-xs text-[#555] hover:text-[#888] border border-[#2a2a4a] rounded px-2 py-1 transition-colors">↻ Refresh</button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+        </div>
+      ) : data.length === 0 ? (
+        <p className="text-[#555] text-center py-20">No assignment data yet. Students need to submit first.</p>
+      ) : (
+        <>
+          {/* Assignment tabs */}
+          <div className="flex gap-2 flex-wrap mb-6">
+            {data.map((a, i) => (
+              <button
+                key={a.assignmentId}
+                onClick={() => setActiveTab(i)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${activeTab === i
+                  ? 'bg-[#2f80ed]/20 border-[#4e9af1] text-[#4e9af1]'
+                  : 'bg-[#1a1a2e] border-[#2a2a4a] text-[#666] hover:border-[#444] hover:text-[#bbb]'
+                  }`}
+              >
+                {a.title}
+                {a.completedCount > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 bg-[#3fb950]/20 text-[#3fb950] rounded-full text-[9px] font-bold">
+                    {a.completedCount}✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {assignment && (
+            <>
+              {/* Assignment stats bar */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                {[
+                  { label: 'Students', value: assignment.totalStudents, color: 'text-white' },
+                  { label: 'Completed', value: `${assignment.completedCount} / ${assignment.totalStudents}`, color: 'text-[#3fb950]' },
+                  { label: 'Avg Score', value: `${assignment.avgScore}/100`, color: assignment.avgScore >= 50 ? 'text-[#3fb950]' : assignment.avgScore >= 30 ? 'text-[#f0a500]' : 'text-[#f85149]' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4 text-center">
+                    <p className={`text-xl font-bold ${color}`}>{value}</p>
+                    <p className="text-xs text-[#555] mt-1">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ranked table */}
+              {assignment.students.length === 0 ? (
+                <p className="text-[#555] text-sm text-center py-12">No submissions yet for this assignment.</p>
+              ) : (
+                <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#2a2a4a] text-left text-xs text-[#555]">
+                        <th className="pb-3 pt-3 px-4 font-semibold w-12">Rank</th>
+                        <th className="pb-3 pt-3 px-4 font-semibold">Student</th>
+                        <th className="pb-3 pt-3 px-4 font-semibold">Status</th>
+                        <th className="pb-3 pt-3 px-4 font-semibold">Attempts</th>
+                        <th className="pb-3 pt-3 px-4 font-semibold">Best Score</th>
+                        <th className="pb-3 pt-3 px-4 font-semibold w-40">Score Bar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignment.students.map((s) => (
+                        <tr key={s.studentId} className="border-b border-[#111122] hover:bg-[#111122] transition-colors">
+                          {/* Rank */}
+                          <td className="py-3 px-4 font-bold text-base">
+                            <span className={medalColor(s.rank)}>{medalIcon(s.rank)}</span>
+                          </td>
+                          {/* Student name + email */}
+                          <td className="py-3 px-4">
+                            <p className="font-semibold text-white text-sm">{s.name}</p>
+                            <p className="text-[10px] text-[#555]">{s.email}</p>
+                          </td>
+                          {/* Completed badge */}
+                          <td className="py-3 px-4">
+                            {s.completed ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">✓ Done</span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-[#2a2a4a] text-[#555] rounded-full">In progress</span>
+                            )}
+                          </td>
+                          {/* Attempts */}
+                          <td className="py-3 px-4 text-[#888] text-xs">{s.attempts}</td>
+                          {/* Score number */}
+                          <td className={`py-3 px-4 font-bold text-sm ${s.bestScore >= 80 ? 'text-[#3fb950]' :
+                            s.bestScore >= 50 ? 'text-[#f0a500]' : 'text-[#f85149]'
+                            }`}>{s.bestScore}/100</td>
+                          {/* Score bar */}
+                          <td className="py-3 px-4">
+                            <div className="w-full bg-[#0d0d1a] rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${s.bestScore >= 80 ? 'bg-[#3fb950]' :
+                                  s.bestScore >= 50 ? 'bg-[#f0a500]' : 'bg-[#f85149]'
+                                  }`}
+                                style={{ width: `${s.bestScore}%` }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SubmissionsView({ assignment, onBack }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -368,6 +516,22 @@ export default function TeacherDashboard() {
           <span className="text-[#666] text-sm ml-2">— {user?.name}</span>
         </div>
         <div className="flex gap-3">
+          {/* Leaderboard button */}
+          <button
+            onClick={() => setView(view === 'leaderboard' ? 'list' : 'leaderboard')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${view === 'leaderboard'
+                ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
+                : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
+              }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2" />
+              <path d="M18 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+              <path d="M8 5h8l1 7-5 3-5-3Z" />
+              <path d="M12 18v3" /><path d="M8 21h8" />
+            </svg>
+            Leaderboard
+          </button>
           {view !== 'create' && (
             <button
               onClick={() => { setView('create'); setCreateResult(null); setCreateError(''); setForm({ title: '', description: '' }); setFiles({ html: '', css: '', js: '' }); setTestsJson(''); setTestsJsonError(''); }}
@@ -386,6 +550,11 @@ export default function TeacherDashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
+
+        {/* ── LEADERBOARD VIEW ── */}
+        {view === 'leaderboard' && (
+          <LeaderboardView onBack={() => setView('list')} />
+        )}
 
         {/* ── SUBMISSIONS VIEW ── */}
         {view === 'submissions' && selectedAssignment && (
