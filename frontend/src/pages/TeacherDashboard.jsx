@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard } from '../api/index.js';
+import { FiAward, FiRefreshCw } from 'react-icons/fi';
+import { MdCheckCircle } from 'react-icons/md';
 
 function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -234,12 +236,15 @@ function LeaderboardView({ onBack }) {
   const assignment = data[activeTab];
 
   const medalColor = (rank) =>
-    rank === 1 ? 'text-[#f0c040]' :
-      rank === 2 ? 'text-[#b0b8c8]' :
-        rank === 3 ? 'text-[#cd7f32]' : 'text-[#555]';
+    rank === 1 ? '#f0c040' :
+      rank === 2 ? '#b0b8c8' :
+        rank === 3 ? '#cd7f32' : '#555';
 
-  const medalIcon = (rank) =>
-    rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+  const MedalIcon = ({ rank }) => (
+    rank <= 3
+      ? <FiAward size={18} style={{ color: medalColor(rank) }} />
+      : <span className="text-xs font-bold text-[#555]">#{rank}</span>
+  );
 
   return (
     <div>
@@ -270,8 +275,9 @@ function LeaderboardView({ onBack }) {
               >
                 {a.title}
                 {a.completedCount > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 bg-[#3fb950]/20 text-[#3fb950] rounded-full text-[9px] font-bold">
-                    {a.completedCount}✓
+                  <span className={`ml-2 text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 ${activeTab === i ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#1a1a2e] text-[#555]'
+                    }`}>
+                    {a.completedCount} <MdCheckCircle size={10} />
                   </span>
                 )}
               </button>
@@ -315,7 +321,7 @@ function LeaderboardView({ onBack }) {
                         <tr key={s.studentId} className="border-b border-[#111122] hover:bg-[#111122] transition-colors">
                           {/* Rank */}
                           <td className="py-3 px-4 font-bold text-base">
-                            <span className={medalColor(s.rank)}>{medalIcon(s.rank)}</span>
+                            <MedalIcon rank={s.rank} />
                           </td>
                           {/* Student name + email */}
                           <td className="py-3 px-4">
@@ -325,7 +331,9 @@ function LeaderboardView({ onBack }) {
                           {/* Completed badge */}
                           <td className="py-3 px-4">
                             {s.completed ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">✓ Done</span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
+                                <MdCheckCircle size={10} /> Done
+                              </span>
                             ) : (
                               <span className="text-[10px] font-bold px-2 py-0.5 bg-[#2a2a4a] text-[#555] rounded-full">In progress</span>
                             )}
@@ -411,7 +419,9 @@ function SubmissionsView({ assignment, onBack }) {
                     <td className="py-2 pr-4 text-[#888] font-mono text-xs">{s.studentId?.slice(0, 8)}…</td>
                     <td className="py-2 pr-4">
                       {s.completed ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#3fb950]/10 text-[#3fb950]">✓ Done</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#3fb950]/10 text-[#3fb950]">
+                          <MdCheckCircle size={12} /> Done
+                        </span>
                       ) : (
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#2a2a4a] text-[#666]">In progress</span>
                       )}
@@ -520,8 +530,8 @@ export default function TeacherDashboard() {
           <button
             onClick={() => setView(view === 'leaderboard' ? 'list' : 'leaderboard')}
             className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${view === 'leaderboard'
-                ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
-                : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
+              ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
+              : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
               }`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

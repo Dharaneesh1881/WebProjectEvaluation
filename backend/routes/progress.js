@@ -148,4 +148,59 @@ router.get('/leaderboard/:assignmentId', requireAuth, requireRole('teacher'), as
     return res.json({ assignment, students: ranked });
 });
 
+// GET /api/student-leaderboard — student-accessible: top 3 + own rank per assignment
+router.get('/student-leaderboard', requireAuth, async (req, res) => {
+    const myId = req.user.id;
+
+    const assignments = await Assignment.find({ isActive: true })
+        .select('_id title')
+        .sort({ createdAt: -1 });
+
+    const allProgress = await StudentProgress.find(
+        { assignmentId: { $in: assignments.map(a => a._id.toString()) } }
+    );
+
+    const studentIds = [...new Set(allProgress.map(p => p.studentId))];
+    const users = await User.find({ _id: { $in: studentIds } }).select('_id name');
+    const userMap = Object.fromEntries(users.map(u => [u._id.toString(), u.name]));
+
+    const progressByAssignment = {};
+    for (const p of allProgress) {
+        if (!progressByAssignment[p.assignmentId]) progressByAssignment[p.assignmentId] = [];
+        progressByAssignment[p.assignmentId].push(p);
+    }
+
+    const result = assignments.map(a => {
+        const records = progressByAssignment[a._id.toString()] || [];
+
+        // Rank everyone
+        const ranked = records
+            .map(p => ({
+                studentId: p.studentId,
+                name: userMap[p.studentId] || 'Student',
+                bestScore: p.bestScore,
+                completed: p.completed,
+                attempts: p.attempts
+            }))
+            .sort((a, b) => {
+                if (b.completed !== a.completed) return b.completed ? 1 : -1;
+                return b.bestScore - a.bestScore;
+            })
+            .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+        const top3 = ranked.slice(0, 3);
+        const me = ranked.find(s => s.studentId === myId) || null;
+
+        return {
+            assignmentId: a._id,
+            title: a.title,
+            totalStudents: ranked.length,
+            top3,
+            myRank: me ? { rank: me.rank, bestScore: me.bestScore, completed: me.completed } : null
+        };
+    });
+
+    return res.json(result);
+});
+
 export default router;

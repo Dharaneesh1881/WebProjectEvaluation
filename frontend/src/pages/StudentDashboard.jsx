@@ -2,7 +2,178 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
-import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, socket } from '../api/index.js';
+import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
+import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft } from 'react-icons/fi';
+import { MdCheckCircle } from 'react-icons/md';
+
+function StudentLeaderboardView({ currentUser, onBack }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
+
+  useEffect(() => {
+    getStudentLeaderboard()
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const assignment = data[activeTab];
+
+  // Podium order: 2nd, 1st, 3rd (classic podium shape)
+  const podiumOrder = (top3) => {
+    const second = top3.find(s => s.rank === 2) || null;
+    const first = top3.find(s => s.rank === 1) || null;
+    const third = top3.find(s => s.rank === 3) || null;
+    return [second, first, third].filter(Boolean);
+  };
+
+  const podiumConfig = {
+    1: { h: 'h-28', bg: 'from-[#f0c040]/20 to-[#f0c040]/5', border: 'border-[#f0c040]/40', text: 'text-[#f0c040]', color: '#f0c040', label: '1st' },
+    2: { h: 'h-20', bg: 'from-[#b0b8c8]/20 to-[#b0b8c8]/5', border: 'border-[#b0b8c8]/40', text: 'text-[#b0b8c8]', color: '#b0b8c8', label: '2nd' },
+    3: { h: 'h-14', bg: 'from-[#cd7f32]/20 to-[#cd7f32]/5', border: 'border-[#cd7f32]/40', text: 'text-[#cd7f32]', color: '#cd7f32', label: '3rd' },
+  };
+
+  const scoreColor = (score) =>
+    score >= 80 ? 'text-[#3fb950]' : score >= 50 ? 'text-[#f0a500]' : 'text-[#f85149]';
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
+        <div>
+          <h2 className="text-xl font-bold text-white">Leaderboard</h2>
+          <p className="text-xs text-[#555]">Top students per assignment</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+        </div>
+      ) : data.length === 0 ? (
+        <p className="text-[#555] text-center py-20">No assignments available yet.</p>
+      ) : (
+        <>
+          {/* Assignment tabs */}
+          <div className="flex gap-2 flex-wrap mb-8">
+            {data.map((a, i) => (
+              <button
+                key={a.assignmentId}
+                onClick={() => setActiveTab(i)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${activeTab === i
+                  ? 'bg-[#2f80ed]/20 border-[#4e9af1] text-[#4e9af1] shadow-[0_0_12px_rgba(78,154,241,0.15)]'
+                  : 'bg-[#1a1a2e] border-[#2a2a4a] text-[#666] hover:border-[#444] hover:text-[#bbb]'
+                  }`}
+              >
+                {a.title}
+                {a.myRank && (
+                  <span className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.myRank.completed ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#f0a500]/10 text-[#f0a500]'
+                    }`}>
+                    #{a.myRank.rank}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {assignment && (
+            <>
+              {/* No submissions at all */}
+              {assignment.totalStudents === 0 ? (
+                <div className="text-center py-16 text-[#555]">
+                  <FiFlag size={36} className="mx-auto mb-3 text-[#444]" />
+                  <p className="text-sm">No one has submitted yet. Be the first!</p>
+                </div>
+              ) : (
+                <>
+                  {/* ── PODIUM ────────────────────── */}
+                  <div className="flex items-end justify-center gap-3 mb-8">
+                    {podiumOrder(assignment.top3).map((s) => {
+                      const cfg = podiumConfig[s.rank];
+                      const isMe = s.name === currentUser?.name;
+                      return (
+                        <div key={s.rank} className="flex flex-col items-center gap-2" style={{ width: 140 }}>
+                          {/* Medal icon */}
+                          <div className={`mb-1 p-2 rounded-full ${isMe ? 'ring-2 ring-[#4e9af1]' : ''}`}>
+                            <FiAward size={28} style={{ color: cfg.color }} />
+                          </div>
+                          <p className={`text-xs font-bold text-center leading-tight ${isMe ? 'text-[#4e9af1]' : 'text-white'
+                            }`}>
+                            {s.name}{isMe ? ' (You)' : ''}
+                          </p>
+                          <p className={`text-sm font-bold ${scoreColor(s.bestScore)}`}>{s.bestScore}/100</p>
+                          {s.completed && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
+                              <MdCheckCircle size={10} /> Done
+                            </span>
+                          )}
+                          {/* Podium block */}
+                          <div className={`w-full ${cfg.h} bg-gradient-to-b ${cfg.bg} border ${cfg.border} rounded-t-xl flex items-center justify-center`}>
+                            <span className={`text-xl font-black ${cfg.text}`}>{cfg.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Podium base line */}
+                  <div className="h-1 bg-gradient-to-r from-transparent via-[#2a2a4a] to-transparent rounded-full mb-8" />
+
+                  {/* ── YOUR RANK ─────────────────── */}
+                  {assignment.myRank ? (
+                    <div className={`rounded-2xl border p-5 flex items-center gap-5 ${assignment.myRank.completed
+                      ? 'bg-[#3fb950]/5 border-[#3fb950]/30'
+                      : 'bg-[#1a1a2e] border-[#2a2a4a]'
+                      }`}>
+                      <div className="p-3 rounded-xl" style={{ background: `${podiumConfig[assignment.myRank.rank]?.color ?? '#4e9af1'}18` }}>
+                        {assignment.myRank.rank <= 3
+                          ? <FiAward size={32} style={{ color: podiumConfig[assignment.myRank.rank]?.color }} />
+                          : <FiTarget size={32} className="text-[#4e9af1]" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-[#555] mb-0.5">Your rank</p>
+                        <p className="text-3xl font-black text-white">#{assignment.myRank.rank}</p>
+                        <p className="text-xs text-[#555] mt-0.5">out of {assignment.totalStudents} student{assignment.totalStudents !== 1 ? 's' : ''}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-[#555] mb-0.5">Best score</p>
+                        <p className={`text-2xl font-bold ${scoreColor(assignment.myRank.bestScore)}`}>{assignment.myRank.bestScore}/100</p>
+                        {assignment.myRank.completed && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
+                            <MdCheckCircle size={10} /> Completed
+                          </span>
+                        )}
+                      </div>
+                      {/* Score progress bar */}
+                      <div className="w-24">
+                        <div className="w-full bg-[#0d0d1a] rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${assignment.myRank.bestScore >= 80 ? 'bg-[#3fb950]' :
+                              assignment.myRank.bestScore >= 50 ? 'bg-[#f0a500]' : 'bg-[#f85149]'
+                              }`}
+                            style={{ width: `${assignment.myRank.bestScore}%` }}
+                          />
+                        </div>
+                        <p className="text-[9px] text-[#555] mt-1 text-center">{assignment.myRank.bestScore}% score</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#2a2a4a] p-8 text-center">
+                      <FiZap size={36} className="mx-auto mb-2 text-[#444]" />
+                      <p className="text-sm font-semibold text-white mb-1">You haven&apos;t submitted yet</p>
+                      <p className="text-xs text-[#555]">Submit your code to appear on the leaderboard!</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function AssignmentCard({ a, progress, onStart }) {
   const p = progress[a._id];
@@ -22,7 +193,7 @@ function AssignmentCard({ a, progress, onStart }) {
           {/* Completion / progress badge overlay */}
           {isCompleted ? (
             <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#3fb950]/20 border border-[#3fb950]/50 text-[#3fb950] text-[10px] font-bold rounded-full backdrop-blur-sm">
-              ✓ Completed
+              <span className="inline-flex items-center gap-1"><MdCheckCircle size={12} /> Completed</span>
             </span>
           ) : hasTried ? (
             <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-[10px] font-bold rounded-full backdrop-blur-sm">
@@ -36,7 +207,9 @@ function AssignmentCard({ a, progress, onStart }) {
           <h3 className="font-semibold text-white text-sm">{a.title}</h3>
           {/* Badge when no screenshot */}
           {!a.referenceScreenshotUrl && isCompleted && (
-            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/40 text-[#3fb950] rounded-full">✓ Completed</span>
+            <span className="inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/40 text-[#3fb950] rounded-full">
+              <MdCheckCircle size={10} /> Completed
+            </span>
           )}
           {!a.referenceScreenshotUrl && !isCompleted && hasTried && (
             <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] rounded-full">{p.bestScore}/100</span>
@@ -62,10 +235,11 @@ function AssignmentCard({ a, progress, onStart }) {
 
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
+  const [view, setView] = useState('list'); // 'list' | 'editor' | 'leaderboard'
   const [assignments, setAssignments] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
-  const [progress, setProgress] = useState({});  // { [assignmentId]: {...} }
+  const [progress, setProgress] = useState({});
 
   // Submission state
   const [files, setFiles] = useState({ html: '', css: '', js: '' });
@@ -174,12 +348,29 @@ export default function StudentDashboard() {
           <span className="text-[#666] text-sm ml-2">— {user?.name}</span>
         </div>
         <div className="flex gap-3">
-          {selectedAssignment && (
+          {selectedAssignment ? (
             <button
               onClick={() => setSelectedAssignment(null)}
               className="text-sm text-[#4e9af1] hover:underline"
             >
               ← All assignments
+            </button>
+          ) : (
+            // Leaderboard toggle button (only on list)
+            <button
+              onClick={() => setView(v => v === 'leaderboard' ? 'list' : 'leaderboard')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${view === 'leaderboard'
+                ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
+                : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
+                }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2" />
+                <path d="M18 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+                <path d="M8 5h8l1 7-5 3-5-3Z" />
+                <path d="M12 18v3" /><path d="M8 21h8" />
+              </svg>
+              Leaderboard
             </button>
           )}
           <button
@@ -191,8 +382,15 @@ export default function StudentDashboard() {
         </div>
       </header>
 
+      {/* Leaderboard view */}
+      {!selectedAssignment && view === 'leaderboard' && (
+        <main className="max-w-2xl mx-auto px-6 py-8">
+          <StudentLeaderboardView currentUser={user} onBack={() => setView('list')} />
+        </main>
+      )}
+
       {/* Assignment list */}
-      {!selectedAssignment && (
+      {!selectedAssignment && view === 'list' && (
         <main className="max-w-5xl mx-auto px-6 py-8">
           <h2 className="text-xl font-bold text-white mb-2">Available Assignments</h2>
           <p className="text-sm text-[#666] mb-6">Pick an assignment and submit your code for evaluation.</p>
