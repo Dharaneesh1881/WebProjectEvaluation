@@ -9,13 +9,13 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/web_eval');
 mongoose.connection.on('connected', () => console.log('Worker: MongoDB connected'));
 
 const worker = new Worker('evaluation', async (job) => {
-  const { submissionId } = job.data;
+  const { submissionId, assignmentId } = job.data;
   console.log(`Worker: picked up job for submissionId ${submissionId}`);
 
   await Submission.updateOne({ submissionId }, { status: 'processing' });
 
   try {
-    await runEvaluation(submissionId);
+    await runEvaluation(submissionId, assignmentId);
     await Submission.updateOne({ submissionId }, { status: 'done' });
     console.log(`Worker: completed ${submissionId}`);
   } catch (err) {

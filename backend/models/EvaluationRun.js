@@ -14,10 +14,13 @@ const bucketSchema = new mongoose.Schema({
 }, { _id: false });
 
 const visualBucketSchema = new mongoose.Schema({
-  score:       Number,
-  maxScore:    Number,
-  diffPercent: Number,
-  tests:       { type: Array, default: [] }
+  score:                  Number,
+  maxScore:               Number,
+  diffPercent:            Number,
+  studentScreenshotUrl:   { type: String, default: null },
+  referenceScreenshotUrl: { type: String, default: null },
+  diffImageUrl:           { type: String, default: null },
+  tests:                  { type: Array, default: [] }
 }, { _id: false });
 
 const evaluationRunSchema = new mongoose.Schema({

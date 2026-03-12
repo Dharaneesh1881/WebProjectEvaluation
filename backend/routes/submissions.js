@@ -2,32 +2,32 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import Submission from '../models/Submission.js';
 import EvaluationRun from '../models/EvaluationRun.js';
+import Assignment from '../models/Assignment.js';
 import { evaluationQueue } from '../queue/index.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
 // POST /api/submissions — student submits code for evaluation
-router.post('/submissions', async (req, res) => {
-  const { html, css, js, studentId } = req.body;
+router.post('/submissions', requireAuth, async (req, res) => {
+  const { html, css, js, assignmentId } = req.body;
 
-  if (!html && !css && !js) {
-    return res.status(400).json({ error: 'At least one of html, css, or js is required' });
-  }
+  if (!assignmentId) return res.status(400).json({ error: 'assignmentId is required' });
+
+  const assignment = await Assignment.findById(assignmentId);
+  if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
 
   const submissionId = uuidv4();
 
   await Submission.create({
     submissionId,
-    studentId: studentId || 'anonymous',
-    files: {
-      html: html || '',
-      css:  css  || '',
-      js:   js   || ''
-    },
+    assignmentId,
+    studentId: req.user.id,
+    files: { html: html || '', css: css || '', js: js || '' },
     status: 'pending'
   });
 
-  await evaluationQueue.add('evaluate', { submissionId }, {
+  await evaluationQueue.add('evaluate', { submissionId, assignmentId }, {
     attempts: 2,
     backoff: { type: 'fixed', delay: 3000 }
   });
@@ -36,7 +36,7 @@ router.post('/submissions', async (req, res) => {
 });
 
 // GET /api/result/:id — poll for evaluation result
-router.get('/result/:id', async (req, res) => {
+router.get('/result/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
 
   const submission = await Submission.findOne({ submissionId: id });
