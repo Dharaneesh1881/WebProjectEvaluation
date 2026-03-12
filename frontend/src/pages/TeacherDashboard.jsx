@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard, getTeacherStudentSubmission } from '../api/index.js';
-import { FiAward, FiRefreshCw } from 'react-icons/fi';
+import { FiAward, FiRefreshCw, FiBookOpen, FiPlus, FiLogOut, FiChevronRight, FiBarChart2, FiList } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
 function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
@@ -608,210 +608,227 @@ export default function TeacherDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0]">
-      {/* Header */}
-      <header className="bg-[#1a1a2e] border-b border-[#2a2a4a] px-6 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-white font-bold">Teacher Dashboard</span>
-          <span className="text-[#666] text-sm ml-2">— {user?.name}</span>
+    <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0] flex">
+
+      {/* ── LEFT SIDEBAR ── */}
+      <aside className="w-56 shrink-0 bg-[#0d0d1a] border-r border-[#2a2a4a] flex flex-col min-h-screen sticky top-0 h-screen">
+        {/* Logo / Brand */}
+        <div className="px-5 py-5 border-b border-[#2a2a4a]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#2f80ed]/30 to-[#4e9af1]/10 border border-[#2f80ed]/30 flex items-center justify-center">
+              <FiBookOpen size={14} className="text-[#4e9af1]" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-bold leading-tight">Teacher</p>
+              <p className="text-[#444] text-[10px] truncate max-w-[100px]">{user?.name}</p>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-3">
-          {/* Leaderboard button */}
-          <button
-            onClick={() => setView(view === 'leaderboard' ? 'list' : 'leaderboard')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${view === 'leaderboard'
-              ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
-              : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
-              }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 9H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2" />
-              <path d="M18 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
-              <path d="M8 5h8l1 7-5 3-5-3Z" />
-              <path d="M12 18v3" /><path d="M8 21h8" />
-            </svg>
-            Leaderboard
-          </button>
-          {view !== 'create' && (
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {[
+            { id: 'list', icon: FiList, label: 'Assignments' },
+            { id: 'leaderboard', icon: FiBarChart2, label: 'Leaderboard' },
+            { id: 'create', icon: FiPlus, label: 'New Assignment' },
+          ].map(item => (
             <button
-              onClick={() => { setView('create'); setCreateResult(null); setCreateError(''); setForm({ title: '', description: '' }); setFiles({ html: '', css: '', js: '' }); setTestsJson(''); setTestsJsonError(''); }}
-              className="px-4 py-1.5 text-sm font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda] transition-colors"
+              key={item.id}
+              onClick={() => {
+                if (item.id === 'create') {
+                  setView('create');
+                  setCreateResult(null); setCreateError('');
+                  setForm({ title: '', description: '' });
+                  setFiles({ html: '', css: '', js: '' });
+                  setTestsJson(''); setTestsJsonError('');
+                } else {
+                  setView(item.id);
+                }
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${view === item.id
+                  ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
+                  : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
+                }`}
             >
-              + New Assignment
+              <item.icon size={16} />
+              {item.label}
+              {view === item.id && <FiChevronRight size={12} className="ml-auto" />}
             </button>
-          )}
+          ))}
+        </nav>
+
+        {/* Sign out */}
+        <div className="px-3 pb-5">
           <button
             onClick={logout}
-            className="px-4 py-1.5 text-sm text-[#888] border border-[#2a2a4a] rounded-lg hover:border-[#444] transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
           >
-            Sign out
+            <FiLogOut size={16} />
+            Sign Out
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      {/* ── MAIN CONTENT ── */}
+      <div className="flex-1 flex flex-col min-w-0">
 
-        {/* ── LEADERBOARD VIEW ── */}
-        {view === 'leaderboard' && (
-          <LeaderboardView onBack={() => setView('list')} onStudentClick={handleStudentClick} />
-        )}
+        {/* Top bar — context title only */}
+        <header className="bg-[#0d0d1a] border-b border-[#2a2a4a] px-8 py-3 flex items-center gap-3 sticky top-0 z-10">
+          <h1 className="font-bold text-white text-sm capitalize">
+            {view === 'list' ? 'Assignments' :
+              view === 'create' ? 'New Assignment' :
+                view === 'leaderboard' ? 'Leaderboard' :
+                  view === 'submissions' ? `Submissions — ${selectedAssignment?.title}` :
+                    view === 'editTests' ? `Edit Tests — ${selectedAssignment?.title}` :
+                      view === 'studentDetail' ? 'Student Submission' : view}
+          </h1>
+        </header>
 
-        {/* ── SUBMISSIONS VIEW ── */}
-        {view === 'submissions' && selectedAssignment && (
-          <SubmissionsView assignment={selectedAssignment} onBack={() => setView('list')} onStudentClick={handleStudentClick} />
-        )}
-
-        {/* ── STUDENT DETAIL VIEW ── */}
-        {view === 'studentDetail' && selectedAssignmentId && selectedStudentId && (
-          <StudentDetailView
-            assignmentId={selectedAssignmentId}
-            studentId={selectedStudentId}
-            onBack={() => setView(historyView)}
-          />
-        )}
-
-        {/* ── EDIT TESTS VIEW ── */}
-        {view === 'editTests' && selectedAssignment && (
-          <EditTestsView assignment={selectedAssignment} onBack={() => setView('list')} />
-        )}
-
-        {/* ── LIST VIEW ── */}
-        {view === 'list' && (
-          <>
-            <h2 className="text-xl font-bold text-white mb-6">Your Assignments</h2>
-            {loading ? (
-              <div className="flex justify-center py-20">
-                <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
-              </div>
-            ) : assignments.length === 0 ? (
-              <div className="text-center py-20 text-[#555]">
-                <p className="text-lg mb-2">No assignments yet.</p>
-                <p className="text-sm">Click "New Assignment" to create your first one.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {assignments.map(a => (
-                  <AssignmentCard
-                    key={a._id}
-                    a={a}
-                    onViewSubmissions={(assignment) => { setSelectedAssignment(assignment); setView('submissions'); }}
-                    onEditTests={(assignment) => { setSelectedAssignment(assignment); setView('editTests'); }}
-                    onDelete={handleDelete}
-                    deletingId={deletingId}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── CREATE VIEW ── */}
-        {view === 'create' && (
-          <>
-            <div className="flex items-center gap-3 mb-6">
-              <button onClick={() => setView('list')} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
-              <h2 className="text-xl font-bold text-white">Create Assignment</h2>
+        <main className="flex-1 overflow-y-auto">
+          {/* full-height views (no padding wrapper) */}
+          {view === 'studentDetail' && selectedAssignmentId && selectedStudentId ? (
+            <div className="px-8 py-8">
+              <StudentDetailView
+                assignmentId={selectedAssignmentId}
+                studentId={selectedStudentId}
+                onBack={() => setView(historyView)}
+              />
             </div>
+          ) : (
+            <div className="px-8 py-8">
 
-            {createResult ? (
-              <div className="bg-[#1a1a2e] border border-[#3fb950]/40 rounded-xl p-6">
-                <p className="text-[#3fb950] font-semibold text-sm mb-3">Assignment created successfully!</p>
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  {[
-                    ['DOM tests (auto)', createResult.testsGenerated?.dom],
-                    ['Style tests (auto)', createResult.testsGenerated?.style],
-                    ['Functionality tests', createResult.testsGenerated?.functionality],
-                    ['Interaction tests', createResult.testsGenerated?.interaction],
-                  ].map(([label, val]) => (
-                    <p key={label} className="text-sm text-[#888]">
-                      {label}: <span className="text-white font-semibold">{val ?? 0}</span>
-                    </p>
-                  ))}
-                </div>
-                {createResult.referenceScreenshotUrl && (
-                  <div>
-                    <p className="text-xs text-[#666] mb-2">Reference screenshot (uploaded to Cloudinary):</p>
-                    <img
-                      src={createResult.referenceScreenshotUrl}
-                      alt="Reference"
-                      className="w-full max-w-md rounded-lg border border-[#2a2a4a]"
-                    />
+              {/* ── LEADERBOARD VIEW ── */}
+              {view === 'leaderboard' && (
+                <LeaderboardView onBack={() => setView('list')} onStudentClick={handleStudentClick} />
+              )}
+
+              {/* ── SUBMISSIONS VIEW ── */}
+              {view === 'submissions' && selectedAssignment && (
+                <SubmissionsView assignment={selectedAssignment} onBack={() => setView('list')} onStudentClick={handleStudentClick} />
+              )}
+
+              {/* ── EDIT TESTS VIEW ── */}
+              {view === 'editTests' && selectedAssignment && (
+                <EditTestsView assignment={selectedAssignment} onBack={() => setView('list')} />
+              )}
+
+              {/* ── LIST VIEW ── */}
+              {view === 'list' && (
+                <>
+                  <h2 className="text-xl font-bold text-white mb-6">Your Assignments</h2>
+                  {loading ? (
+                    <div className="flex justify-center py-20">
+                      <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div className="text-center py-20 text-[#555]">
+                      <p className="text-lg mb-2">No assignments yet.</p>
+                      <p className="text-sm">Click &quot;New Assignment&quot; in the sidebar to create your first one.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {assignments.map(a => (
+                        <AssignmentCard
+                          key={a._id}
+                          a={a}
+                          onViewSubmissions={(assignment) => { setSelectedAssignment(assignment); setView('submissions'); }}
+                          onEditTests={(assignment) => { setSelectedAssignment(assignment); setView('editTests'); }}
+                          onDelete={handleDelete}
+                          deletingId={deletingId}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── CREATE VIEW ── */}
+              {view === 'create' && (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <button onClick={() => setView('list')} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
+                    <h2 className="text-xl font-bold text-white">Create Assignment</h2>
                   </div>
-                )}
-                <button
-                  onClick={() => setView('list')}
-                  className="mt-4 px-4 py-2 text-sm font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda]"
-                >
-                  View all assignments
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#888] mb-1.5">Assignment title *</label>
-                    <input
-                      type="text" required
-                      value={form.title}
-                      onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white
-                                 placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
-                      placeholder="e.g. Quiz App Recreation"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-[#888] mb-1.5">Description</label>
-                    <input
-                      type="text"
-                      value={form.description}
-                      onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white
-                                 placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
-                      placeholder="Brief description for students"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-[#888] mb-1.5">Reference code *</label>
-                  <p className="text-xs text-[#555] mb-2">Paste the original/reference HTML, CSS, and JS. Tests will be auto-generated from this.</p>
-                  <div className="h-[400px] flex flex-col border border-[#2a2a4a] rounded-xl overflow-hidden">
-                    <CodeEditor files={files} onChange={(tab, val) => setFiles(f => ({ ...f, [tab]: val }))} />
-                  </div>
-                </div>
+                  {createResult ? (
+                    <div className="bg-[#1a1a2e] border border-[#3fb950]/40 rounded-xl p-6">
+                      <p className="text-[#3fb950] font-semibold text-sm mb-3">Assignment created successfully!</p>
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        {[
+                          ['DOM tests (auto)', createResult.testsGenerated?.dom],
+                          ['Style tests (auto)', createResult.testsGenerated?.style],
+                          ['Functionality tests', createResult.testsGenerated?.functionality],
+                          ['Interaction tests', createResult.testsGenerated?.interaction],
+                        ].map(([label, val]) => (
+                          <p key={label} className="text-sm text-[#888]">
+                            {label}: <span className="text-white font-semibold">{val ?? 0}</span>
+                          </p>
+                        ))}
+                      </div>
+                      {createResult.referenceScreenshotUrl && (
+                        <div>
+                          <p className="text-xs text-[#666] mb-2">Reference screenshot:</p>
+                          <img src={createResult.referenceScreenshotUrl} alt="Reference" className="w-full max-w-md rounded-lg border border-[#2a2a4a]" />
+                        </div>
+                      )}
+                      <button onClick={() => setView('list')} className="mt-4 px-4 py-2 text-sm font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda]">
+                        View all assignments
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleCreate} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#888] mb-1.5">Assignment title *</label>
+                          <input type="text" required value={form.title}
+                            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                            className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
+                            placeholder="e.g. Quiz App Recreation" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#888] mb-1.5">Description</label>
+                          <input type="text" value={form.description}
+                            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                            className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
+                            placeholder="Brief description for students" />
+                        </div>
+                      </div>
 
-                {/* Tests JSON */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#888] mb-1.5">
-                    Tests JSON — <span className="text-[#555] font-normal">object with functionalityTests (40 marks) and interactionTests (15 marks)</span>
-                  </label>
-                  <textarea
-                    rows={10}
-                    value={testsJson}
-                    onChange={e => { setTestsJson(e.target.value); setTestsJsonError(''); }}
-                    placeholder={EDIT_TESTS_PLACEHOLDER}
-                    className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-xs text-[#ccc]
-                               font-mono placeholder:text-[#2a2a4a] focus:outline-none focus:border-[#4e9af1] resize-y"
-                    spellCheck={false}
-                  />
-                  {testsJsonError && <p className="text-xs text-[#f85149] mt-1">{testsJsonError}</p>}
-                </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#888] mb-1.5">Reference code *</label>
+                        <p className="text-xs text-[#555] mb-2">Paste the original/reference HTML, CSS, and JS. Tests will be auto-generated from this.</p>
+                        <div className="h-[400px] flex flex-col border border-[#2a2a4a] rounded-xl overflow-hidden">
+                          <CodeEditor files={files} onChange={(tab, val) => setFiles(f => ({ ...f, [tab]: val }))} />
+                        </div>
+                      </div>
 
-                {createError && <p className="text-xs text-[#f85149]">{createError}</p>}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#888] mb-1.5">
+                          Tests JSON — <span className="text-[#555] font-normal">functionalityTests (40 marks) and interactionTests (15 marks)</span>
+                        </label>
+                        <textarea rows={10} value={testsJson}
+                          onChange={e => { setTestsJson(e.target.value); setTestsJsonError(''); }}
+                          placeholder={EDIT_TESTS_PLACEHOLDER}
+                          className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-xs text-[#ccc] font-mono placeholder:text-[#2a2a4a] focus:outline-none focus:border-[#4e9af1] resize-y"
+                          spellCheck={false} />
+                        {testsJsonError && <p className="text-xs text-[#f85149] mt-1">{testsJsonError}</p>}
+                      </div>
 
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-6 py-2.5 bg-[#2f80ed] text-white text-sm font-semibold rounded-lg
-                             hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {creating ? 'Creating & capturing screenshot…' : 'Create Assignment'}
-                </button>
-              </form>
-            )}
-          </>
-        )}
-      </main>
+                      {createError && <p className="text-xs text-[#f85149]">{createError}</p>}
+
+                      <button type="submit" disabled={creating}
+                        className="px-6 py-2.5 bg-[#2f80ed] text-white text-sm font-semibold rounded-lg hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        {creating ? 'Creating & capturing screenshot…' : 'Create Assignment'}
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
+
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
-import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft } from 'react-icons/fi';
+import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiCode } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
 function StudentLeaderboardView({ currentUser, onBack }) {
@@ -338,142 +338,176 @@ export default function StudentDashboard() {
   }, []);
 
   const isEvaluating = status === 'pending' || status === 'processing';
+  const activeView = selectedAssignment ? 'editor' : view;
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0]">
-      {/* Header */}
-      <header className="bg-[#1a1a2e] border-b border-[#2a2a4a] px-6 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-white font-bold">Student Dashboard</span>
-          <span className="text-[#666] text-sm ml-2">— {user?.name}</span>
+    <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0] flex">
+
+      {/* ── LEFT SIDEBAR ── */}
+      <aside className="w-56 shrink-0 bg-[#0d0d1a] border-r border-[#2a2a4a] flex flex-col min-h-screen sticky top-0 h-screen">
+        {/* Brand */}
+        <div className="px-5 py-5 border-b border-[#2a2a4a]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#2f80ed]/30 to-[#4e9af1]/10 border border-[#2f80ed]/30 flex items-center justify-center">
+              <FiCode size={14} className="text-[#4e9af1]" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-bold leading-tight">Student</p>
+              <p className="text-[#444] text-[10px] truncate max-w-[100px]">{user?.name}</p>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-3">
-          {selectedAssignment ? (
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {[
+            { id: 'list', icon: FiList, label: 'Assignments' },
+            { id: 'leaderboard', icon: FiBarChart2, label: 'Leaderboard' },
+          ].map(item => (
             <button
-              onClick={() => setSelectedAssignment(null)}
-              className="text-sm text-[#4e9af1] hover:underline"
-            >
-              ← All assignments
-            </button>
-          ) : (
-            // Leaderboard toggle button (only on list)
-            <button
-              onClick={() => setView(v => v === 'leaderboard' ? 'list' : 'leaderboard')}
-              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${view === 'leaderboard'
-                ? 'bg-[#f0c040]/10 border-[#f0c040]/40 text-[#f0c040]'
-                : 'border-[#2a2a4a] text-[#888] hover:border-[#f0c040]/40 hover:text-[#f0c040]'
+              key={item.id}
+              onClick={() => { setSelectedAssignment(null); setView(item.id); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeView === item.id
+                ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
+                : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
                 }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2" />
-                <path d="M18 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
-                <path d="M8 5h8l1 7-5 3-5-3Z" />
-                <path d="M12 18v3" /><path d="M8 21h8" />
-              </svg>
-              Leaderboard
+              <item.icon size={16} />
+              {item.label}
+              {activeView === item.id && <FiChevronRight size={12} className="ml-auto" />}
             </button>
+          ))}
+
+          {/* Shown when inside a specific assignment */}
+          {selectedAssignment && (
+            <>
+              <div className="border-t border-[#2a2a4a] my-2" />
+              <div className="px-3 py-2">
+                <p className="text-[10px] text-[#444] font-semibold uppercase tracking-wider mb-1.5">Current</p>
+                <p className="text-xs text-[#888] font-medium leading-snug line-clamp-2">{selectedAssignment.title}</p>
+              </div>
+              <button
+                onClick={() => setSelectedAssignment(null)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
+              >
+                <FiArrowLeft size={16} />
+                All Assignments
+              </button>
+            </>
           )}
+        </nav>
+
+        {/* Sign out */}
+        <div className="px-3 pb-5">
           <button
             onClick={logout}
-            className="px-4 py-1.5 text-sm text-[#888] border border-[#2a2a4a] rounded-lg hover:border-[#444] transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
           >
-            Sign out
+            <FiLogOut size={16} />
+            Sign Out
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Leaderboard view */}
-      {!selectedAssignment && view === 'leaderboard' && (
-        <main className="max-w-2xl mx-auto px-6 py-8">
-          <StudentLeaderboardView currentUser={user} onBack={() => setView('list')} />
-        </main>
-      )}
+      {/* ── MAIN CONTENT ── */}
+      <div className="flex-1 flex flex-col min-w-0">
 
-      {/* Assignment list */}
-      {!selectedAssignment && view === 'list' && (
-        <main className="max-w-5xl mx-auto px-6 py-8">
-          <h2 className="text-xl font-bold text-white mb-2">Available Assignments</h2>
-          <p className="text-sm text-[#666] mb-6">Pick an assignment and submit your code for evaluation.</p>
+        {/* Top bar */}
+        <header className="bg-[#0d0d1a] border-b border-[#2a2a4a] px-8 py-3 sticky top-0 z-10">
+          <h1 className="font-bold text-white text-sm">
+            {selectedAssignment ? selectedAssignment.title
+              : view === 'leaderboard' ? 'Leaderboard'
+                : 'Available Assignments'}
+          </h1>
+        </header>
 
-          {loadingList ? (
-            <div className="flex justify-center py-20">
-              <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
-            </div>
-          ) : assignments.length === 0 ? (
-            <p className="text-[#555] text-center py-20">No assignments available yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {assignments.map(a => (
-                <AssignmentCard key={a._id} a={a} progress={progress} onStart={handleStart} />
-              ))}
-            </div>
-          )}
-        </main>
-      )}
+        {/* ─ Leaderboard view ─ */}
+        {!selectedAssignment && view === 'leaderboard' && (
+          <main className="flex-1 overflow-y-auto px-8 py-8 max-w-2xl">
+            <StudentLeaderboardView currentUser={user} onBack={() => setView('list')} />
+          </main>
+        )}
 
-      {/* Submission view — two panel */}
-      {selectedAssignment && (
-        <div className="flex flex-col md:flex-row h-[calc(100vh-57px)] overflow-hidden">
-          {/* Editor column */}
-          <section className="flex flex-col md:w-[55%] border-b md:border-b-0 md:border-r border-[#2a2a4a] h-[55vh] md:h-auto">
-            <div className="px-4 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] shrink-0">
-              <p className="text-xs text-[#666]">Assignment</p>
-              <h3 className="text-sm font-semibold text-white">{selectedAssignment.title}</h3>
-              {selectedAssignment.description && (
-                <p className="text-xs text-[#555] mt-0.5">{selectedAssignment.description}</p>
-              )}
-            </div>
-
-            {/* Loading spinner while fetching best code */}
-            {loadingCode ? (
-              <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
-                <div className="flex flex-col items-center gap-3 text-[#555]">
-                  <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
-                  <p className="text-xs">Loading your best submission…</p>
-                </div>
+        {/* ─ Assignment list ─ */}
+        {!selectedAssignment && view === 'list' && (
+          <main className="flex-1 overflow-y-auto px-8 py-8">
+            <p className="text-sm text-[#666] mb-6">Pick an assignment and submit your code for evaluation.</p>
+            {loadingList ? (
+              <div className="flex justify-center py-20">
+                <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
               </div>
+            ) : assignments.length === 0 ? (
+              <p className="text-[#555] text-center py-20">No assignments available yet.</p>
             ) : (
-              <>
-                {/* Banner: editor pre-filled with best code */}
-                {codePrefilled && (
-                  <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-[#3fb950]/10 border-b border-[#3fb950]/20">
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#3fb950]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                      <span className="text-xs text-[#3fb950] font-semibold">Loaded from your best submission — edit and resubmit to improve your score</span>
-                    </div>
-                    <button onClick={() => setCodePrefilled(false)} className="text-[#3fb950]/60 hover:text-[#3fb950] text-xs">✕</button>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assignments.map(a => (
+                  <AssignmentCard key={a._id} a={a} progress={progress} onStart={handleStart} />
+                ))}
+              </div>
+            )}
+          </main>
+        )}
+
+        {/* ─ Submission / Editor view ─ */}
+        {selectedAssignment && (
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            {/* Editor column */}
+            <section className="flex flex-col md:w-[55%] border-b md:border-b-0 md:border-r border-[#2a2a4a] h-[55vh] md:h-auto">
+              <div className="px-4 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] shrink-0">
+                <p className="text-xs text-[#666]">Assignment</p>
+                <h3 className="text-sm font-semibold text-white">{selectedAssignment.title}</h3>
+                {selectedAssignment.description && (
+                  <p className="text-xs text-[#555] mt-0.5">{selectedAssignment.description}</p>
                 )}
-                <CodeEditor files={files} onChange={handleFileChange} />
-              </>
-            )}
-
-            <div className="shrink-0 px-3 py-2 bg-[#0f0f1a]">
-              <button
-                onClick={handleSubmit}
-                disabled={isEvaluating || loadingCode}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-md text-sm font-semibold transition-colors
-                           bg-[#2f80ed] text-white hover:bg-[#1a6cda]
-                           disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed"
-              >
-                {isEvaluating ? 'Evaluating…' : 'Submit for Evaluation'}
-              </button>
-              {submitError && <p className="mt-1.5 text-xs text-[#f85149]">{submitError}</p>}
-            </div>
-          </section>
-
-          {/* Results column */}
-          <section className="flex-1 overflow-y-auto p-4">
-            {status ? (
-              <ResultsPanel status={status} result={result} />
-            ) : (
-              <div className="flex items-center justify-center h-full text-[#555] text-sm text-center px-4">
-                <p>Your evaluation results will appear here after submission.</p>
               </div>
-            )}
-          </section>
-        </div>
-      )}
+
+              {loadingCode ? (
+                <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
+                  <div className="flex flex-col items-center gap-3 text-[#555]">
+                    <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                    <p className="text-xs">Loading your best submission…</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {codePrefilled && (
+                    <div className="shrink-0 flex items-center justify-between px-4 py-2 bg-[#3fb950]/10 border-b border-[#3fb950]/20">
+                      <div className="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-[#3fb950]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        <span className="text-xs text-[#3fb950] font-semibold">Loaded from your best submission — edit and resubmit to improve your score</span>
+                      </div>
+                      <button onClick={() => setCodePrefilled(false)} className="text-[#3fb950]/60 hover:text-[#3fb950] text-xs">✕</button>
+                    </div>
+                  )}
+                  <CodeEditor files={files} onChange={handleFileChange} />
+                </>
+              )}
+
+              <div className="shrink-0 px-3 py-2 bg-[#0f0f1a]">
+                <button
+                  onClick={handleSubmit}
+                  disabled={isEvaluating || loadingCode}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-md text-sm font-semibold transition-colors bg-[#2f80ed] text-white hover:bg-[#1a6cda] disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed"
+                >
+                  {isEvaluating ? 'Evaluating…' : 'Submit for Evaluation'}
+                </button>
+                {submitError && <p className="mt-1.5 text-xs text-[#f85149]">{submitError}</p>}
+              </div>
+            </section>
+
+            {/* Results column */}
+            <section className="flex-1 overflow-y-auto p-4">
+              {status ? (
+                <ResultsPanel status={status} result={result} />
+              ) : (
+                <div className="flex items-center justify-center h-full text-[#555] text-sm text-center px-4">
+                  <p>Your evaluation results will appear here after submission.</p>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
