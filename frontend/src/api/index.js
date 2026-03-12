@@ -129,3 +129,8 @@ export async function getStudentLeaderboard() {
   const res = await fetch(`${API_BASE}/student-leaderboard`, { headers: authHeaders() });
   return handleResponse(res); // [{ assignmentId, title, totalStudents, top3, myRank }]
 }
+
+export async function getTeacherStudentSubmission(assignmentId, studentId) {
+  const res = await fetch(`${API_BASE}/teacher/student-submission/${assignmentId}/${studentId}`, { headers: authHeaders() });
+  return handleResponse(res);
+}

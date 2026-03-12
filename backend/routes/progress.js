@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import StudentProgress from '../models/StudentProgress.js';
 import Submission from '../models/Submission.js';
+import EvaluationRun from '../models/EvaluationRun.js';
 import User from '../models/User.js';
 import Assignment from '../models/Assignment.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -201,6 +202,39 @@ router.get('/student-leaderboard', requireAuth, async (req, res) => {
     });
 
     return res.json(result);
+});
+
+// GET /api/teacher/student-submission/:assignmentId/:studentId — teacher-accessible: view specific student's best submission code and result
+router.get('/teacher/student-submission/:assignmentId/:studentId', requireAuth, requireRole('teacher'), async (req, res) => {
+    const { assignmentId, studentId } = req.params;
+
+    const progress = await StudentProgress.findOne({ assignmentId, studentId });
+    if (!progress || !progress.bestSubmissionId) {
+        return res.status(404).json({ error: 'No submission found for this student.' });
+    }
+
+    const [submission, evalRun, user] = await Promise.all([
+        Submission.findOne({ submissionId: progress.bestSubmissionId }),
+        EvaluationRun.findOne({ submissionId: progress.bestSubmissionId }),
+        User.findById(studentId).select('name email')
+    ]);
+
+    if (!submission) {
+        return res.status(404).json({ error: 'Submission data not found.' });
+    }
+
+    return res.json({
+        student: user ? { name: user.name, email: user.email } : null,
+        files: {
+            html: submission.files.html || '',
+            css: submission.files.css || '',
+            js: submission.files.js || ''
+        },
+        result: evalRun || null,
+        bestScore: progress.bestScore,
+        completed: progress.completed,
+        attempts: progress.attempts
+    });
 });
 
 export default router;

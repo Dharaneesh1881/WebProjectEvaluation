@@ -14,42 +14,46 @@ const TAB_COLORS = {
   js: 'text-[#f7df1e]',
 };
 
-export function CodeEditor({ files, onChange }) {
+export function CodeEditor({ files, onChange, readOnly = false }) {
   const [activeTab, setActiveTab] = useState('html');
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-
-      {/* Tab bar */}
-      <div className="flex shrink-0 bg-[#1a1a2e] border-b border-[#2a2a4a]">
-        {TABS.map(tab => (
+    <div className="flex-1 flex flex-col min-h-0 bg-[#0d0d1a]">
+      {/* File tabs */}
+      <div className="flex shrink-0 border-b border-[#2a2a4a] bg-[#141424]">
+        {TABS.map(t => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={[
-              'px-4 py-2.5 text-xs font-bold tracking-widest uppercase transition-colors duration-150',
-              'border-b-2 focus:outline-none',
-              activeTab === tab
-                ? `${TAB_COLORS[tab]} border-current bg-[#0d0d1a]`
-                : 'text-[#666] border-transparent hover:text-[#bbb] hover:bg-[#151525]',
-            ].join(' ')}
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={`px-4 py-2.5 text-xs font-semibold font-mono tracking-wider border-b-2 transition-colors ${activeTab === t
+                ? `border-[#4e9af1] bg-[#1a1a2e] ${TAB_COLORS[t]}`
+                : 'border-transparent text-[#666] hover:bg-[#1a1a2e] hover:text-[#bbb]'
+              }`}
           >
-            {tab.toUpperCase()}
+            {t.toUpperCase()}
           </button>
         ))}
       </div>
 
-      {/* Code textarea */}
-      <textarea
-        className="flex-1 resize-none bg-[#0d0d1a] text-[#c9d1d9] border-none outline-none
-                   p-4 font-mono text-sm leading-relaxed scrollbar-thin
-                   placeholder:text-[#3a3a5a]"
-        style={{ fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace" }}
-        value={files[activeTab]}
-        onChange={e => onChange(activeTab, e.target.value)}
-        spellCheck={false}
-        placeholder={PLACEHOLDERS[activeTab]}
-      />
+      {/* Code area container */}
+      <div className="flex-1 relative">
+        <textarea
+          key={activeTab}
+          value={files[activeTab]}
+          onChange={(e) => onChange?.(activeTab, e.target.value)}
+          placeholder={PLACEHOLDERS[activeTab]}
+          readOnly={readOnly}
+          spellCheck={false}
+          className={`absolute inset-0 w-full h-full p-4 bg-[#0d0d1a] border-none resize-none
+                     text-[13px] font-mono leading-relaxed outline-none focus:ring-0
+                     ${readOnly ? 'text-[#888] cursor-default' : 'text-[#e0e0e0]'}
+                     placeholder-[#444] transition-colors`}
+          style={{
+            fontFamily: '"Fira Code", "JetBrains Mono", Consolas, monospace',
+            tabSize: 2
+          }}
+        />
+      </div>
     </div>
   );
 }

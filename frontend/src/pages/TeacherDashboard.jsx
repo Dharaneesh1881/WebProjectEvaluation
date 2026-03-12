@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
-import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard } from '../api/index.js';
+import { ResultsPanel } from '../components/ResultsPanel.jsx';
+import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard, getTeacherStudentSubmission } from '../api/index.js';
 import { FiAward, FiRefreshCw } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
@@ -215,7 +216,7 @@ function EditTestsView({ assignment, onBack }) {
   );
 }
 
-function LeaderboardView({ onBack }) {
+function LeaderboardView({ onBack, onStudentClick }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
@@ -318,7 +319,11 @@ function LeaderboardView({ onBack }) {
                     </thead>
                     <tbody>
                       {assignment.students.map((s) => (
-                        <tr key={s.studentId} className="border-b border-[#111122] hover:bg-[#111122] transition-colors">
+                        <tr
+                          key={s.studentId}
+                          onClick={() => onStudentClick(assignment.assignmentId, s.studentId, 'leaderboard')}
+                          className="border-b border-[#111122] hover:bg-[#1a1a2e] transition-colors cursor-pointer group"
+                        >
                           {/* Rank */}
                           <td className="py-3 px-4 font-bold text-base">
                             <MedalIcon rank={s.rank} />
@@ -369,7 +374,7 @@ function LeaderboardView({ onBack }) {
   );
 }
 
-function SubmissionsView({ assignment, onBack }) {
+function SubmissionsView({ assignment, onBack, onStudentClick }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -415,7 +420,11 @@ function SubmissionsView({ assignment, onBack }) {
                 const r = s.result;
                 const scoreColor = s.bestScore >= 80 ? 'text-[#3fb950]' : s.bestScore >= 50 ? 'text-[#f0a500]' : 'text-[#f85149]';
                 return (
-                  <tr key={s.submissionId ?? s.studentId} className="border-b border-[#1a1a2e] hover:bg-[#1a1a2e]">
+                  <tr
+                    key={s.submissionId ?? s.studentId}
+                    onClick={() => onStudentClick(assignment._id, s.studentId, 'submissions')}
+                    className="border-b border-[#1a1a2e] hover:bg-[#202035] transition-colors cursor-pointer group"
+                  >
                     <td className="py-2 pr-4 text-[#888] font-mono text-xs">{s.studentId?.slice(0, 8)}…</td>
                     <td className="py-2 pr-4">
                       {s.completed ? (
@@ -444,12 +453,86 @@ function SubmissionsView({ assignment, onBack }) {
   );
 }
 
+function StudentDetailView({ assignmentId, studentId, onBack }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getTeacherStudentSubmission(assignmentId, studentId)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message || 'Failed to load code & score'); setLoading(false); });
+  }, [assignmentId, studentId]);
+
+  if (loading) return (
+    <div className="flex justify-center py-20">
+      <div className="w-8 h-8 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+    </div>
+  );
+  if (error) return (
+    <div className="py-20 text-center">
+      <p className="text-[#f85149] mb-4">{error}</p>
+      <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline">← Go Back</button>
+    </div>
+  );
+  if (!data) return null;
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-100px)] -mt-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4 shrink-0 px-2">
+        <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline shrink-0">← Back</button>
+        <div>
+          <h2 className="text-xl font-bold text-white leading-tight">
+            {data.student?.name || 'Student'}&apos;s Submission
+            {data.completed ? (
+              <span className="ml-3 align-middle inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
+                <MdCheckCircle size={10} /> Done
+              </span>
+            ) : (
+              <span className="ml-3 align-middle text-[10px] font-bold px-2 py-0.5 bg-[#2a2a4a] text-[#555] rounded-full">In progress</span>
+            )}
+          </h2>
+          <p className="text-xs text-[#888]">{data.student?.email || studentId}</p>
+        </div>
+      </div>
+
+      {/* Two Pane Split */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden border border-[#2a2a4a] rounded-xl bg-[#0f0f1a] shadow-lg">
+        {/* Left: Code */}
+        <section className="flex flex-col md:w-[50%] border-b md:border-b-0 md:border-r border-[#2a2a4a] bg-[#0d0d1a]">
+          <div className="px-4 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] flex justify-between items-center text-xs shrink-0">
+            <span className="font-semibold text-white">Submitted Code</span>
+            <span className="text-[#888] font-mono">Attempts: {data.attempts ?? 1}</span>
+          </div>
+          <CodeEditor files={data.files} readOnly={true} />
+        </section>
+
+        {/* Right: Results Panel */}
+        <section className="flex-1 overflow-y-auto p-4 bg-[#0d0d1a] custom-scrollbar">
+          {data.result ? (
+            <ResultsPanel status="done" result={data.result} />
+          ) : (
+            <div className="text-center py-16 text-[#555]">
+              <FiRefreshCw size={36} className="mx-auto mb-3 text-[#444]" />
+              <p className="text-sm">No evaluation result found for this submission.</p>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
   const { user, logout } = useAuth();
-  const [view, setView] = useState('list');  // 'list' | 'create' | 'submissions' | 'editTests'
+  const [view, setView] = useState('list'); // 'list' | 'create' | 'submissions' | 'editTests' | 'leaderboard' | 'studentDetail'
+  const [historyView, setHistoryView] = useState('list');
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   // Create form state
@@ -517,6 +600,13 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleStudentClick = (assignmentId, studentId, fromView) => {
+    setSelectedStudentId(studentId);
+    setSelectedAssignmentId(assignmentId);
+    setHistoryView(fromView);
+    setView('studentDetail');
+  };
+
   return (
     <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0]">
       {/* Header */}
@@ -563,12 +653,21 @@ export default function TeacherDashboard() {
 
         {/* ── LEADERBOARD VIEW ── */}
         {view === 'leaderboard' && (
-          <LeaderboardView onBack={() => setView('list')} />
+          <LeaderboardView onBack={() => setView('list')} onStudentClick={handleStudentClick} />
         )}
 
         {/* ── SUBMISSIONS VIEW ── */}
         {view === 'submissions' && selectedAssignment && (
-          <SubmissionsView assignment={selectedAssignment} onBack={() => setView('list')} />
+          <SubmissionsView assignment={selectedAssignment} onBack={() => setView('list')} onStudentClick={handleStudentClick} />
+        )}
+
+        {/* ── STUDENT DETAIL VIEW ── */}
+        {view === 'studentDetail' && selectedAssignmentId && selectedStudentId && (
+          <StudentDetailView
+            assignmentId={selectedAssignmentId}
+            studentId={selectedStudentId}
+            onBack={() => setView(historyView)}
+          />
         )}
 
         {/* ── EDIT TESTS VIEW ── */}
