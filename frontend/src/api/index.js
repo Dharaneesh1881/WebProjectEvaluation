@@ -68,6 +68,15 @@ export async function createAssignment(data) {
   return handleResponse(res);  // { assignmentId, testsGenerated, referenceScreenshotUrl }
 }
 
+export async function updateAssignmentTests(assignmentId, { functionalityTests, interactionTests }) {
+  const res = await fetch(`${API_BASE}/assignments/${assignmentId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ functionalityTests, interactionTests })
+  });
+  return handleResponse(res);
+}
+
 export async function getAssignmentSubmissions(assignmentId) {
   const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
     headers: authHeaders()

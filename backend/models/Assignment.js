@@ -14,15 +14,10 @@ const assignmentSchema = new mongoose.Schema({
   },
 
   evalSpec: {
-    rubric: {
-      html:   { type: Number, default: 30 },
-      css:    { type: Number, default: 25 },
-      js:     { type: Number, default: 30 },
-      visual: { type: Number, default: 15 }
-    },
-    domTests:         { type: [testSchema], default: [] },
-    styleTests:       { type: [testSchema], default: [] },
-    interactionTests: { type: [testSchema], default: [] }
+    domTests:            { type: [testSchema], default: [] },
+    styleTests:          { type: [testSchema], default: [] },
+    interactionTests:    { type: [testSchema], default: [] },
+    functionalityTests:  { type: [testSchema], default: [] }
   },
 
   referenceScreenshotUrl: { type: String, default: null },

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
-import { getAssignments, createAssignment, getAssignmentSubmissions } from '../api/index.js';
+import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests } from '../api/index.js';
 
-function AssignmentCard({ a, onViewSubmissions }) {
+function AssignmentCard({ a, onViewSubmissions, onEditTests }) {
   return (
     <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl overflow-hidden">
       {a.referenceScreenshotUrl && (
@@ -23,8 +23,127 @@ function AssignmentCard({ a, onViewSubmissions }) {
           >
             View Submissions
           </button>
+          <button
+            onClick={() => onEditTests(a)}
+            className="flex-1 py-1.5 text-xs font-semibold bg-[#1a1a2e] text-[#4e9af1] border border-[#4e9af1]/40 rounded-lg hover:border-[#4e9af1] transition-colors"
+          >
+            Edit Tests
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const EDIT_TESTS_PLACEHOLDER = `{
+  "functionalityTests": [
+    {
+      "id": "fn-1",
+      "name": "Counter increases on Add Task",
+      "marks": 10,
+      "steps": [
+        { "action": "read",  "selector": "#counter",   "saveAs": "before" },
+        { "action": "type",  "selector": "#taskInput", "value": "Learn JS" },
+        { "action": "click", "selector": "#increment" },
+        { "action": "read",  "selector": "#counter",   "saveAs": "after" }
+      ],
+      "assert": { "type": "incrementedBy", "from": "before", "to": "after", "by": 1 },
+      "failHint": "Clicking Add Task should increase #counter by 1."
+    }
+  ],
+  "interactionTests": [
+    {
+      "name": "Add Task button is clickable",
+      "weight": 5,
+      "steps": [
+        { "action": "type",  "selector": "#taskInput", "value": "Test" },
+        { "action": "click", "selector": "#increment" }
+      ],
+      "assert": { "type": "countEquals", "selector": "#taskList li", "value": 1 }
+    }
+  ]
+}`;
+
+function EditTestsView({ assignment, onBack }) {
+  const [json, setJson]         = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(null);
+  const [saveError, setSaveError] = useState('');
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!json.trim()) { setJsonError('Paste the JSON object before saving.'); return; }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(json.trim());
+      setJsonError('');
+    } catch {
+      setJsonError('Invalid JSON — check your syntax.');
+      return;
+    }
+
+    const payload = {};
+    if (Array.isArray(parsed.functionalityTests)) payload.functionalityTests = parsed.functionalityTests;
+    if (Array.isArray(parsed.interactionTests))   payload.interactionTests   = parsed.interactionTests;
+
+    if (!Object.keys(payload).length) {
+      setJsonError('JSON must have "functionalityTests" and/or "interactionTests" arrays.');
+      return;
+    }
+
+    setSaving(true); setSaveError('');
+    try {
+      const result = await updateAssignmentTests(assignment._id, payload);
+      setSaved(result);
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline mb-4 flex items-center gap-1">← Back</button>
+      <h2 className="text-lg font-bold text-white mb-1">Edit Tests — {assignment.title}</h2>
+      <p className="text-sm text-[#666] mb-6">
+        Paste a JSON object with <code className="text-[#4e9af1]">functionalityTests</code> and/or <code className="text-[#4e9af1]">interactionTests</code> arrays.
+      </p>
+
+      {saved ? (
+        <div className="bg-[#1a1a2e] border border-[#3fb950]/40 rounded-xl p-6">
+          <p className="text-[#3fb950] font-semibold text-sm mb-2">Tests updated!</p>
+          <p className="text-sm text-[#888]">Functionality tests saved: <span className="text-white font-bold">{saved.functionalityTests}</span></p>
+          <p className="text-sm text-[#888]">Interaction tests saved: <span className="text-white font-bold">{saved.interactionTests}</span></p>
+          <button onClick={onBack} className="mt-4 px-4 py-2 text-sm font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda]">Done</button>
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#888] mb-1.5">
+              Tests JSON — <span className="text-[#555] font-normal">object with functionalityTests (40 marks) and interactionTests (15 marks)</span>
+            </label>
+            <textarea
+              rows={20} value={json}
+              onChange={e => { setJson(e.target.value); setJsonError(''); }}
+              placeholder={EDIT_TESTS_PLACEHOLDER}
+              className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-xs text-[#ccc] font-mono placeholder:text-[#2a2a4a] focus:outline-none focus:border-[#4e9af1] resize-y"
+              spellCheck={false}
+            />
+            {jsonError && <p className="text-xs text-[#f85149] mt-1">{jsonError}</p>}
+          </div>
+
+          {saveError && <p className="text-xs text-[#f85149]">{saveError}</p>}
+          <button
+            type="submit" disabled={saving}
+            className="px-6 py-2.5 bg-[#2f80ed] text-white text-sm font-semibold rounded-lg hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {saving ? 'Saving…' : 'Save Tests'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
@@ -61,11 +180,12 @@ function SubmissionsView({ assignment, onBack }) {
               <tr className="border-b border-[#2a2a4a] text-left text-xs text-[#666]">
                 <th className="pb-2 pr-4 font-semibold">Student ID</th>
                 <th className="pb-2 pr-4 font-semibold">Status</th>
-                <th className="pb-2 pr-4 font-semibold">Score</th>
-                <th className="pb-2 pr-4 font-semibold">HTML</th>
-                <th className="pb-2 pr-4 font-semibold">CSS</th>
-                <th className="pb-2 pr-4 font-semibold">JS</th>
-                <th className="pb-2 font-semibold">Visual</th>
+                <th className="pb-2 pr-4 font-semibold">Total</th>
+                <th className="pb-2 pr-4 font-semibold">Linter/10</th>
+                <th className="pb-2 pr-4 font-semibold">Func/40</th>
+                <th className="pb-2 pr-4 font-semibold">Interact/15</th>
+                <th className="pb-2 pr-4 font-semibold">Visual/20</th>
+                <th className="pb-2 font-semibold">Perf/15</th>
               </tr>
             </thead>
             <tbody>
@@ -84,10 +204,11 @@ function SubmissionsView({ assignment, onBack }) {
                       }`}>{s.status}</span>
                     </td>
                     <td className={`py-2 pr-4 font-bold ${scoreColor}`}>{r ? `${r.totalScore}/100` : '—'}</td>
-                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.html.score}/${r.breakdown.html.maxScore}` : '—'}</td>
-                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.css.score}/${r.breakdown.css.maxScore}` : '—'}</td>
-                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.js.score}/${r.breakdown.js.maxScore}` : '—'}</td>
-                    <td className="py-2 text-[#ccc]">{r ? `${r.breakdown.visual.score}/${r.breakdown.visual.maxScore}` : '—'}</td>
+                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.linter?.score ?? '—'}` : '—'}</td>
+                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.functionality?.score ?? '—'}` : '—'}</td>
+                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.interaction?.score ?? '—'}` : '—'}</td>
+                    <td className="py-2 pr-4 text-[#ccc]">{r ? `${r.breakdown.visual?.score ?? '—'}` : '—'}</td>
+                    <td className="py-2 text-[#ccc]">{r ? `${r.breakdown.performance?.score ?? '—'}` : '—'}</td>
                   </tr>
                 );
               })}
@@ -101,7 +222,7 @@ function SubmissionsView({ assignment, onBack }) {
 
 export default function TeacherDashboard() {
   const { user, logout } = useAuth();
-  const [view, setView]               = useState('list');  // 'list' | 'create' | 'submissions'
+  const [view, setView]               = useState('list');  // 'list' | 'create' | 'submissions' | 'editTests'
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -109,6 +230,8 @@ export default function TeacherDashboard() {
   // Create form state
   const [form, setForm]         = useState({ title: '', description: '' });
   const [files, setFiles]       = useState({ html: '', css: '', js: '' });
+  const [testsJson, setTestsJson]       = useState('');
+  const [testsJsonError, setTestsJsonError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState(null);
   const [createError, setCreateError]   = useState('');
@@ -129,10 +252,26 @@ export default function TeacherDashboard() {
       setCreateError('Title and HTML are required.');
       return;
     }
+
+    // Parse tests JSON if provided
+    let functionalityTests = [];
+    let interactionTests   = [];
+    if (testsJson.trim()) {
+      try {
+        const parsed = JSON.parse(testsJson.trim());
+        functionalityTests = Array.isArray(parsed.functionalityTests) ? parsed.functionalityTests : [];
+        interactionTests   = Array.isArray(parsed.interactionTests)   ? parsed.interactionTests   : [];
+        setTestsJsonError('');
+      } catch {
+        setTestsJsonError('Invalid JSON — check the tests format.');
+        return;
+      }
+    }
+
     setCreateError('');
     setCreating(true);
     try {
-      const result = await createAssignment({ ...form, ...files });
+      const result = await createAssignment({ ...form, ...files, functionalityTests, interactionTests });
       setCreateResult(result);
     } catch (err) {
       setCreateError(err.message);
@@ -152,7 +291,7 @@ export default function TeacherDashboard() {
         <div className="flex gap-3">
           {view !== 'create' && (
             <button
-              onClick={() => { setView('create'); setCreateResult(null); setCreateError(''); setForm({ title: '', description: '' }); setFiles({ html: '', css: '', js: '' }); }}
+              onClick={() => { setView('create'); setCreateResult(null); setCreateError(''); setForm({ title: '', description: '' }); setFiles({ html: '', css: '', js: '' }); setTestsJson(''); setTestsJsonError(''); }}
               className="px-4 py-1.5 text-sm font-semibold bg-[#2f80ed] text-white rounded-lg hover:bg-[#1a6cda] transition-colors"
             >
               + New Assignment
@@ -172,6 +311,11 @@ export default function TeacherDashboard() {
         {/* ── SUBMISSIONS VIEW ── */}
         {view === 'submissions' && selectedAssignment && (
           <SubmissionsView assignment={selectedAssignment} onBack={() => setView('list')} />
+        )}
+
+        {/* ── EDIT TESTS VIEW ── */}
+        {view === 'editTests' && selectedAssignment && (
+          <EditTestsView assignment={selectedAssignment} onBack={() => setView('list')} />
         )}
 
         {/* ── LIST VIEW ── */}
@@ -194,6 +338,7 @@ export default function TeacherDashboard() {
                     key={a._id}
                     a={a}
                     onViewSubmissions={(assignment) => { setSelectedAssignment(assignment); setView('submissions'); }}
+                    onEditTests={(assignment) => { setSelectedAssignment(assignment); setView('editTests'); }}
                   />
                 ))}
               </div>
@@ -212,12 +357,18 @@ export default function TeacherDashboard() {
             {createResult ? (
               <div className="bg-[#1a1a2e] border border-[#3fb950]/40 rounded-xl p-6">
                 <p className="text-[#3fb950] font-semibold text-sm mb-3">Assignment created successfully!</p>
-                <p className="text-sm text-[#888] mb-1">
-                  DOM tests generated: <span className="text-white font-semibold">{createResult.testsGenerated?.dom}</span>
-                </p>
-                <p className="text-sm text-[#888] mb-4">
-                  Style tests generated: <span className="text-white font-semibold">{createResult.testsGenerated?.style}</span>
-                </p>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {[
+                    ['DOM tests (auto)',    createResult.testsGenerated?.dom],
+                    ['Style tests (auto)',  createResult.testsGenerated?.style],
+                    ['Functionality tests', createResult.testsGenerated?.functionality],
+                    ['Interaction tests',   createResult.testsGenerated?.interaction],
+                  ].map(([label, val]) => (
+                    <p key={label} className="text-sm text-[#888]">
+                      {label}: <span className="text-white font-semibold">{val ?? 0}</span>
+                    </p>
+                  ))}
+                </div>
                 {createResult.referenceScreenshotUrl && (
                   <div>
                     <p className="text-xs text-[#666] mb-2">Reference screenshot (uploaded to Cloudinary):</p>
@@ -268,6 +419,23 @@ export default function TeacherDashboard() {
                   <div className="h-[400px] border border-[#2a2a4a] rounded-xl overflow-hidden">
                     <CodeEditor files={files} onChange={(tab, val) => setFiles(f => ({ ...f, [tab]: val }))} />
                   </div>
+                </div>
+
+                {/* Tests JSON */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#888] mb-1.5">
+                    Tests JSON — <span className="text-[#555] font-normal">object with functionalityTests (40 marks) and interactionTests (15 marks)</span>
+                  </label>
+                  <textarea
+                    rows={10}
+                    value={testsJson}
+                    onChange={e => { setTestsJson(e.target.value); setTestsJsonError(''); }}
+                    placeholder={EDIT_TESTS_PLACEHOLDER}
+                    className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-xs text-[#ccc]
+                               font-mono placeholder:text-[#2a2a4a] focus:outline-none focus:border-[#4e9af1] resize-y"
+                    spellCheck={false}
+                  />
+                  {testsJsonError && <p className="text-xs text-[#f85149] mt-1">{testsJsonError}</p>}
                 </div>
 
                 {createError && <p className="text-xs text-[#f85149]">{createError}</p>}

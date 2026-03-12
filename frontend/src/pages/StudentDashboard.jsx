@@ -81,7 +81,23 @@ export default function StudentDashboard() {
       else setStatus(data.status);
     };
     socket.on('evaluation:complete', handler);
-    return () => socket.off('evaluation:complete', handler);
+
+    // Fallback polling — in case the socket event arrived before this listener registered
+    const poll = setInterval(async () => {
+      try {
+        const data = await getResult(submissionId);
+        if (data.status === 'done') {
+          clearInterval(poll);
+          setStatus('done');
+          setResult(data.result);
+        }
+      } catch { /* ignore, keep polling */ }
+    }, 3000);
+
+    return () => {
+      socket.off('evaluation:complete', handler);
+      clearInterval(poll);
+    };
   }, [submissionId]);
 
   const handleFileChange = useCallback((tab, val) => {

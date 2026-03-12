@@ -1,16 +1,44 @@
 import mongoose from 'mongoose';
 
-const testResultSchema = new mongoose.Schema({
+// ── Sub-schemas ────────────────────────────────────────────────────────────
+const linterSubSchema = new mongoose.Schema({
+  score:    Number,
+  maxScore: Number,
+  errors:   [String],
+  warnings: [String],
+  passed:   Boolean
+}, { _id: false, suppressReservedKeysWarning: true });
+
+const fnTestSchema = new mongoose.Schema({}, { strict: false, _id: false });
+
+const intTestSchema = new mongoose.Schema({
   name:   String,
   passed: Boolean,
   weight: Number,
   earned: Number
 }, { _id: false });
 
-const bucketSchema = new mongoose.Schema({
+// ── Bucket schemas ─────────────────────────────────────────────────────────
+const linterBucketSchema = new mongoose.Schema({
+  score:     Number,
+  maxScore:  Number,
+  htmlhint:  linterSubSchema,
+  stylelint: linterSubSchema,
+  eslint:    linterSubSchema
+}, { _id: false });
+
+const functionalityBucketSchema = new mongoose.Schema({
   score:    Number,
   maxScore: Number,
-  tests:    [testResultSchema]
+  earned:   Number,
+  rawMax:   Number,
+  tests:    [fnTestSchema]
+}, { _id: false });
+
+const interactionBucketSchema = new mongoose.Schema({
+  score:    Number,
+  maxScore: Number,
+  tests:    [intTestSchema]
 }, { _id: false });
 
 const visualBucketSchema = new mongoose.Schema({
@@ -23,15 +51,26 @@ const visualBucketSchema = new mongoose.Schema({
   tests:                  { type: Array, default: [] }
 }, { _id: false });
 
+const performanceBucketSchema = new mongoose.Schema({
+  score:            Number,
+  maxScore:         Number,
+  performanceScore: { type: Number, default: null },
+  metrics:          { type: mongoose.Schema.Types.Mixed, default: {} },
+  source:           { type: String, default: null },
+  error:            { type: String, default: null }
+}, { _id: false });
+
+// ── Main schema ────────────────────────────────────────────────────────────
 const evaluationRunSchema = new mongoose.Schema({
   submissionId: { type: String, required: true, index: true },
   completedAt:  { type: Date, default: Date.now },
   totalScore:   { type: Number, default: 0 },
   breakdown: {
-    html:   bucketSchema,
-    css:    bucketSchema,
-    js:     bucketSchema,
-    visual: visualBucketSchema
+    linter:        linterBucketSchema,
+    functionality: functionalityBucketSchema,
+    interaction:   interactionBucketSchema,
+    visual:        visualBucketSchema,
+    performance:   performanceBucketSchema
   },
   errorLog: { type: String, default: '' }
 });

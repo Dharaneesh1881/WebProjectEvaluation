@@ -2,6 +2,22 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { uploadScreenshot, downloadImageAsBuffer } from '../utils/cloudinary.js';
 
+// ── Convert PNG to grayscale in-place ──────────────────────────────────────
+// Removes color differences so layout/structure dominates the comparison.
+function toGrayscale(png) {
+  for (let i = 0; i < png.data.length; i += 4) {
+    const r    = png.data[i];
+    const g    = png.data[i + 1];
+    const b    = png.data[i + 2];
+    // Human-eye weighted formula (ITU-R BT.601)
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    png.data[i]     = gray;
+    png.data[i + 1] = gray;
+    png.data[i + 2] = gray;
+    // alpha channel (i+3) left unchanged
+  }
+}
+
 export async function runVisualTest(browser, url, submissionId, assignmentId, referenceScreenshotUrl) {
   const noBaseline = { diffPercent: 100, diffScore: 0, studentScreenshotUrl: null, referenceScreenshotUrl: null, diffImageUrl: null };
 
@@ -59,9 +75,15 @@ export async function runVisualTest(browser, url, submissionId, assignmentId, re
     return { diffPercent: 100, diffScore: 0, studentScreenshotUrl, referenceScreenshotUrl, diffImageUrl: null };
   }
 
+  // Convert both images to grayscale before comparison
+  // This makes layout/structure differences dominant; color differences are ignored
+  toGrayscale(img1);
+  toGrayscale(img2);
+
   const { width, height } = img1;
   const diff = new PNG({ width, height });
-  const numMismatchedPixels = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.1 });
+  // threshold 0.15 is slightly more tolerant after grayscale conversion
+  const numMismatchedPixels = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.15 });
 
   const totalPixels = width * height;
   const diffPercent = Math.round((numMismatchedPixels / totalPixels) * 10000) / 100;
