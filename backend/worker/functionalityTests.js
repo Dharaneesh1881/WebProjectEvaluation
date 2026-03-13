@@ -25,16 +25,14 @@
  *   valueInRange, elementExists
  */
 
+import { enableRequestWhitelist } from './networkPolicy.js';
+
 // ── Page setup for each test case (fresh isolated context) ────────────────
-async function createFreshPage(browser, fileUrl) {
+async function createFreshPage(browser, fileUrl, allowedDomains = []) {
   const context = await browser.createBrowserContext();
   const page    = await context.newPage();
 
-  await page.setRequestInterception(true);
-  page.on('request', req => {
-    const u = req.url();
-    (u.startsWith('file://') || u.startsWith('data:')) ? req.continue() : req.abort();
-  });
+  await enableRequestWhitelist(page, allowedDomains);
 
   // Override dialogs — capture but don't block execution
   const capturedDialogs = [];
@@ -237,7 +235,7 @@ async function runAssertion(page, assert, savedValues) {
 }
 
 // ── Main: run all test cases ───────────────────────────────────────────────
-export async function runFunctionalityTests(browser, fileUrl, testCases) {
+export async function runFunctionalityTests(browser, fileUrl, testCases, allowedDomains = []) {
   // If no tests defined, return 0 earned / 40 max
   if (!testCases || testCases.length === 0) {
     return { tests: [], earned: 0, score: 0, maxScore: 40, rawMax: 0 };
@@ -263,7 +261,7 @@ export async function runFunctionalityTests(browser, fileUrl, testCases) {
     let page    = null;
 
     try {
-      ({ context, page } = await createFreshPage(browser, fileUrl));
+      ({ context, page } = await createFreshPage(browser, fileUrl, allowedDomains));
       const savedValues = {};
 
       // Execute steps one by one; continue even if a step fails

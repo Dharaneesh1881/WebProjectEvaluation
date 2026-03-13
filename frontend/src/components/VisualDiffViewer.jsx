@@ -52,6 +52,37 @@ function ImageFrame({ src, label, noLabel }) {
   );
 }
 
+function PageComparisonCard({ test, index }) {
+  const pct = test?.diffPercent ?? 100;
+  const match = Math.max(0, 100 - pct).toFixed(1);
+  const color =
+    pct <= 5 ? '#3fb950' :
+      pct <= 20 ? '#f0a500' :
+        '#f85149';
+
+  return (
+    <div className="rounded-xl border border-[var(--border-color)] overflow-hidden bg-[var(--bg-surface)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
+        <div>
+          <p className="text-xs font-semibold text-[var(--text-strong)]">{test.pageName || `Page ${index + 1}`}</p>
+          {test.error && (
+            <p className="text-[10px] text-[#f85149] mt-0.5">{test.error}</p>
+          )}
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] text-[var(--text-faint)] uppercase tracking-wider">Visual Match</p>
+          <p className="text-sm font-bold" style={{ color }}>{match}%</p>
+        </div>
+      </div>
+      <div className="grid gap-3 p-4 md:grid-cols-3">
+        <ImageFrame src={test.referenceScreenshotUrl} label="Expected" noLabel="No reference screenshot" />
+        <ImageFrame src={test.studentScreenshotUrl} label="Yours" noLabel="No student screenshot" />
+        <ImageFrame src={test.diffImageUrl} label="Difference" noLabel="No diff image available" />
+      </div>
+    </div>
+  );
+}
+
 export function VisualDiffViewer({
   referenceScreenshotUrl,
   studentScreenshotUrl,
@@ -130,30 +161,40 @@ export function VisualDiffViewer({
       {/* ── Side-by-side view ───────────────────────────────────────── */}
       {active === 'side-by-side' && (
         <div className="space-y-3">
-          <div className="flex gap-3">
-            <ImageFrame src={urls.reference} label="Expected (Teacher)" noLabel="No reference screenshot" />
-            <ImageFrame src={urls.student} label="Yours (Student)" noLabel="No student screenshot" />
-          </div>
-
-          {/* ── Diff image strip ── */}
-          {urls.diff ? (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-faint)] mb-1.5">
-                Pixel-diff Map
-                <span className="ml-2 font-normal normal-case">
-                  (highlighted regions differ)
-                </span>
-              </p>
-              <img
-                src={urls.diff}
-                alt="pixel diff"
-                className="w-full rounded-lg border border-[var(--border-color)]"
-              />
+          {tests.length > 1 ? (
+            <div className="space-y-4">
+              {tests.map((test, index) => (
+                <PageComparisonCard key={test.pageName || index} test={test} index={index} />
+              ))}
             </div>
           ) : (
-            <div className="w-full h-20 rounded-lg border border-[var(--border-color)] flex items-center justify-center text-[var(--text-faint)] text-xs">
-              No diff image available
-            </div>
+            <>
+              <div className="flex gap-3">
+                <ImageFrame src={urls.reference} label="Expected (Teacher)" noLabel="No reference screenshot" />
+                <ImageFrame src={urls.student} label="Yours (Student)" noLabel="No student screenshot" />
+              </div>
+
+              {/* ── Diff image strip ── */}
+              {urls.diff ? (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-faint)] mb-1.5">
+                    Pixel-diff Map
+                    <span className="ml-2 font-normal normal-case">
+                      (highlighted regions differ)
+                    </span>
+                  </p>
+                  <img
+                    src={urls.diff}
+                    alt="pixel diff"
+                    className="w-full rounded-lg border border-[var(--border-color)]"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-20 rounded-lg border border-[var(--border-color)] flex items-center justify-center text-[var(--text-faint)] text-xs">
+                  No diff image available
+                </div>
+              )}
+            </>
           )}
 
           {/* ── Per-page stat table ── */}

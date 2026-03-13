@@ -30,6 +30,7 @@ const assignmentSchema = new mongoose.Schema({
   referenceScreenshotUrl: { type: String, default: null },
   referenceScreenshots: { type: [String], default: [] },  // multi-state screenshots
   referencePageScreenshots: { type: [pageScreenshotSchema], default: [] },
+  allowedCdnDomains: { type: [String], default: [] },
   baselineGeneratedAt: { type: Date, default: null },
 
   isActive: { type: Boolean, default: true },

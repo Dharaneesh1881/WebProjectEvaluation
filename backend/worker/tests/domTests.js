@@ -1,23 +1,17 @@
-async function setupPage(browser, url) {
+import { enableRequestWhitelist } from '../networkPolicy.js';
+
+async function setupPage(browser, url, allowedDomains = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const u = req.url();
-    if (u.startsWith('file://') || u.startsWith('data:')) {
-      req.continue();
-    } else {
-      req.abort();
-    }
-  });
+  await enableRequestWhitelist(page, allowedDomains);
 
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
   return { context, page };
 }
 
-export async function runDomTests(browser, url, tests) {
-  const { context, page } = await setupPage(browser, url);
+export async function runDomTests(browser, url, tests, allowedDomains = []) {
+  const { context, page } = await setupPage(browser, url, allowedDomains);
 
   const results = [];
   for (const test of tests) {

@@ -1,6 +1,7 @@
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { uploadScreenshot, downloadImageAsBuffer } from '../utils/cloudinary.js';
+import { enableRequestWhitelist } from './networkPolicy.js';
 
 // ── Convert PNG to grayscale in-place ──────────────────────────────────────
 // Removes color differences so layout/structure dominates the comparison.
@@ -18,16 +19,11 @@ function toGrayscale(png) {
   }
 }
 
-async function setupPage(browser) {
+async function setupPage(browser, allowedDomains = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const u = req.url();
-    if (u.startsWith('file://') || u.startsWith('data:')) req.continue();
-    else req.abort();
-  });
+  await enableRequestWhitelist(page, allowedDomains);
 
   await page.setViewport({ width: 1280, height: 720 });
   return { context, page };
@@ -46,7 +42,8 @@ export async function runVisualTest(browser, {
   pageFilePaths,
   submissionId,
   assignmentId,
-  referencePages = []
+  referencePages = [],
+  allowedDomains = []
 }) {
   const noBaseline = {
     diffPercent: 100,
@@ -62,7 +59,7 @@ export async function runVisualTest(browser, {
     return noBaseline;
   }
 
-  const { context, page } = await setupPage(browser);
+  const { context, page } = await setupPage(browser, allowedDomains);
   const results = [];
   const referenceByPage = new Map(referencePages.map((pageRef) => [pageRef.pageName, pageRef]));
   const studentPageNames = Object.keys(pageFilePaths || {});

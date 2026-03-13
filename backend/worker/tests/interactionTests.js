@@ -12,16 +12,13 @@
  * }
  */
 
-async function setupInteractivePage(browser, url) {
+import { enableRequestWhitelist } from '../networkPolicy.js';
+
+async function setupInteractivePage(browser, url, allowedDomains = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const u = req.url();
-    if (u.startsWith('file://') || u.startsWith('data:')) req.continue();
-    else req.abort();
-  });
+  await enableRequestWhitelist(page, allowedDomains);
 
   await page.evaluateOnNewDocument(() => {
     window._alertCalled = false;
@@ -66,11 +63,11 @@ async function checkAssertion(page, assertion) {
   }, assertion);
 }
 
-export async function runInteractionTests(browser, url, tests) {
+export async function runInteractionTests(browser, url, tests, allowedDomains = []) {
   const results = [];
 
   for (const test of tests) {
-    const { context, page } = await setupInteractivePage(browser, url);
+    const { context, page } = await setupInteractivePage(browser, url, allowedDomains);
     let passed = false;
 
     try {

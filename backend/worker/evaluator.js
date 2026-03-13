@@ -26,6 +26,7 @@ import { runFunctionalityTests } from './functionalityTests.js';
 import { runInteractionTests } from './tests/interactionTests.js';
 import { runVisualTest } from './visualTest.js';
 import { runLighthouse } from './lighthouseRunner.js';
+import { resolveAllowedDomains } from './networkPolicy.js';
 import { calculateScore } from './scoreCalculator.js';
 import { getMainFile, mergeFilesByType, normalizeStoredFiles } from '../utils/projectFiles.js';
 
@@ -69,6 +70,7 @@ export async function runEvaluation(submissionId, assignmentId) {
   const mergedCss = mergeFilesByType(files, 'css');
   const mergedJs = mergeFilesByType(files, 'js');
   const spec = assignment.evalSpec;
+  const allowedDomains = resolveAllowedDomains(assignment.allowedCdnDomains);
 
   // ── 1. Build temp file ─────────────────────────────────────────────────
   const { filePath, dir, pageFilePaths } = await buildPage(submissionId, files);
@@ -101,14 +103,14 @@ export async function runEvaluation(submissionId, assignmentId) {
       // ── 5. Functionality tests (40 marks) ──────────────────────────────
       const fnTests = spec.functionalityTests ?? [];
       console.log(`[${submissionId}] Functionality tests (${fnTests.length} cases)...`);
-      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests);
+      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests, allowedDomains);
       console.log(`[${submissionId}] Functionality score: ${functionalityResult.score}/40`);
 
       // ── 6. Interaction tests (15 marks) ────────────────────────────────
       const intTests = spec.interactionTests ?? [];
       if (intTests.length > 0) {
         console.log(`[${submissionId}] Interaction tests (${intTests.length} tests)...`);
-        interactionResults = await runInteractionTests(browser, fileUrl, intTests);
+        interactionResults = await runInteractionTests(browser, fileUrl, intTests, allowedDomains);
       }
 
       // ── 7. Visual test (20 marks — grayscale pixelmatch) ────────────────
@@ -119,7 +121,8 @@ export async function runEvaluation(submissionId, assignmentId) {
           pageFilePaths,
           submissionId,
           assignmentId,
-          referencePages: resolveReferencePages(assignment)
+          referencePages: resolveReferencePages(assignment),
+          allowedDomains
         }
       );
     } finally {
