@@ -1,35 +1,23 @@
 import fs from 'fs-extra';
 import path from 'path';
-
-function extractBodyContent(html) {
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  return bodyMatch ? bodyMatch[1] : html;
-}
+import { bundleProjectPages } from './bundler.js';
 
 export async function buildPage(submissionId, files) {
   const dir = path.join('/tmp', `eval-${submissionId}`);
   await fs.ensureDir(dir);
 
-  const assembled = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-${files.css || ''}
-  </style>
-</head>
-<body>
-${extractBodyContent(files.html || '')}
-  <script>
-${files.js || ''}
-  </script>
-</body>
-</html>`;
+  const bundle = bundleProjectPages(files);
+  const pageFilePaths = {};
 
-  const filePath = path.join(dir, 'index.html');
-  await fs.writeFile(filePath, assembled, 'utf-8');
-  return { filePath, dir };
+  for (const page of bundle.pages) {
+    const pagePath = path.join(dir, page.name);
+    await fs.ensureDir(path.dirname(pagePath));
+    await fs.writeFile(pagePath, page.html, 'utf-8');
+    pageFilePaths[page.name] = pagePath;
+  }
+
+  const filePath = pageFilePaths[bundle.mainPage.name];
+  return { filePath, dir, bundle, pageFilePaths };
 }
 
 export async function cleanupPage(dir) {

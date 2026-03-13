@@ -585,6 +585,7 @@ export function ResultsPanel({ status, result }) {
                   studentScreenshotUrl={b.studentScreenshotUrl}
                   diffImageUrl={b.diffImageUrl}
                   diffPercent={b.diffPercent}
+                  tests={b.tests || []}
                 />
               </div>
             )}

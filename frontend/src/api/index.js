@@ -19,6 +19,11 @@ function authHeaders() {
   };
 }
 
+function authOnlyHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function handleResponse(res) {
   const data = await res.json().catch(() => ({ error: 'Unknown error' }));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
@@ -63,9 +68,9 @@ export async function createAssignment(data) {
   const res = await fetch(`${API_BASE}/assignments`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(data)  // { title, description, html, css, js }
+    body: JSON.stringify(data)
   });
-  return handleResponse(res);  // { assignmentId, testsGenerated, referenceScreenshotUrl }
+  return handleResponse(res);
 }
 
 export async function updateAssignmentTests(assignmentId, { functionalityTests, interactionTests }) {
@@ -94,13 +99,13 @@ export async function getAssignmentSubmissions(assignmentId) {
 
 // ── Submissions ─────────────────────────────────────────────────────────────
 
-export async function submitCode({ html, css, js, assignmentId }) {
+export async function submitCode({ files, assignmentId }) {
   const res = await fetch(`${API_BASE}/submissions`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ html, css, js, assignmentId })
+    body: JSON.stringify({ files, assignmentId })
   });
-  return handleResponse(res);  // { submissionId }
+  return handleResponse(res);
 }
 
 export async function getResult(submissionId) {
@@ -117,7 +122,7 @@ export async function getStudentProgress() {
 
 export async function getBestCode(assignmentId) {
   const res = await fetch(`${API_BASE}/progress/${assignmentId}/code`, { headers: authHeaders() });
-  return handleResponse(res);  // { html, css, js }
+  return handleResponse(res);
 }
 
 export async function getLeaderboard() {
@@ -132,5 +137,18 @@ export async function getStudentLeaderboard() {
 
 export async function getTeacherStudentSubmission(assignmentId, studentId) {
   const res = await fetch(`${API_BASE}/teacher/student-submission/${assignmentId}/${studentId}`, { headers: authHeaders() });
+  return handleResponse(res);
+}
+
+export async function parseProjectZip(zipFile) {
+  const body = new FormData();
+  body.append('zip', zipFile);
+
+  const res = await fetch(`${API_BASE}/project-files/zip`, {
+    method: 'POST',
+    headers: authOnlyHeaders(),
+    body
+  });
+
   return handleResponse(res);
 }

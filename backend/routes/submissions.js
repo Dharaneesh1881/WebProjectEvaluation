@@ -5,17 +5,28 @@ import EvaluationRun from '../models/EvaluationRun.js';
 import Assignment from '../models/Assignment.js';
 import { evaluationQueue } from '../queue/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { ProjectFilesError, validateAndNormalizeFiles } from '../utils/projectFiles.js';
 
 const router = Router();
 
 // POST /api/submissions — student submits code for evaluation
 router.post('/submissions', requireAuth, async (req, res) => {
-  const { html, css, js, assignmentId } = req.body;
+  const { files: incomingFiles, assignmentId } = req.body;
 
   if (!assignmentId) return res.status(400).json({ error: 'assignmentId is required' });
 
   const assignment = await Assignment.findById(assignmentId);
   if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+  let normalized;
+  try {
+    normalized = validateAndNormalizeFiles(incomingFiles || req.body);
+  } catch (err) {
+    if (err instanceof ProjectFilesError) {
+      return res.status(err.status).json({ error: err.message, details: err.details || [] });
+    }
+    throw err;
+  }
 
   const submissionId = uuidv4();
 
@@ -23,7 +34,7 @@ router.post('/submissions', requireAuth, async (req, res) => {
     submissionId,
     assignmentId,
     studentId: req.user.id,
-    files: { html: html || '', css: css || '', js: js || '' },
+    files: normalized.files,
     status: 'pending'
   });
 
@@ -32,7 +43,11 @@ router.post('/submissions', requireAuth, async (req, res) => {
     backoff: { type: 'fixed', delay: 3000 }
   });
 
-  return res.status(202).json({ submissionId });
+  return res.status(202).json({
+    submissionId,
+    fileCount: normalized.files.length,
+    warnings: normalized.warnings
+  });
 });
 
 // GET /api/result/:id — poll for evaluation result

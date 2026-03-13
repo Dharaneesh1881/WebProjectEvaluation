@@ -18,14 +18,7 @@ function toGrayscale(png) {
   }
 }
 
-export async function runVisualTest(browser, url, submissionId, assignmentId, referenceScreenshotUrl) {
-  const noBaseline = { diffPercent: 100, diffScore: 0, studentScreenshotUrl: null, referenceScreenshotUrl: null, diffImageUrl: null };
-
-  if (!referenceScreenshotUrl) {
-    console.warn('No reference screenshot URL — skipping visual test');
-    return noBaseline;
-  }
-
+async function setupPage(browser) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
@@ -37,70 +30,183 @@ export async function runVisualTest(browser, url, submissionId, assignmentId, re
   });
 
   await page.setViewport({ width: 1280, height: 720 });
+  return { context, page };
+}
+
+async function capturePageScreenshot(page, url) {
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
   await page.addStyleTag({
     content: '*, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }'
   });
   await new Promise(r => setTimeout(r, 300));
+  return page.screenshot({ fullPage: false });
+}
 
-  const screenshotBuffer = await page.screenshot({ fullPage: false });
-  await context.close();
+export async function runVisualTest(browser, {
+  pageFilePaths,
+  submissionId,
+  assignmentId,
+  referencePages = []
+}) {
+  const noBaseline = {
+    diffPercent: 100,
+    diffScore: 0,
+    studentScreenshotUrl: null,
+    referenceScreenshotUrl: null,
+    diffImageUrl: null,
+    tests: []
+  };
 
-  // Upload student screenshot to Cloudinary
-  let studentScreenshotUrl = null;
+  if (!referencePages.length) {
+    console.warn('No reference page screenshots — skipping visual test');
+    return noBaseline;
+  }
+
+  const { context, page } = await setupPage(browser);
+  const results = [];
+  const referenceByPage = new Map(referencePages.map((pageRef) => [pageRef.pageName, pageRef]));
+  const studentPageNames = Object.keys(pageFilePaths || {});
+  const allPageNames = Array.from(new Set([
+    ...referencePages.map((pageRef) => pageRef.pageName),
+    ...studentPageNames
+  ]));
+
   try {
-    studentScreenshotUrl = await uploadScreenshot(
-      Buffer.from(screenshotBuffer),
-      `submissions/${assignmentId}`,
-      `student_${submissionId}`
-    );
-  } catch (err) {
-    console.error('Failed to upload student screenshot:', err.message);
+    for (const pageName of allPageNames) {
+      const referencePage = referenceByPage.get(pageName) || null;
+      const localPagePath = pageFilePaths?.[pageName];
+      let screenshotBuffer = null;
+      let studentScreenshotUrl = null;
+
+      if (localPagePath) {
+        screenshotBuffer = await capturePageScreenshot(page, `file://${localPagePath}`);
+
+        try {
+          studentScreenshotUrl = await uploadScreenshot(
+            Buffer.from(screenshotBuffer),
+            `submissions/${assignmentId}`,
+            `student_${submissionId}_${pageName.replace(/[^\w.-]+/g, '_')}`
+          );
+        } catch (err) {
+          console.error('Failed to upload student screenshot:', err.message);
+        }
+      }
+
+      if (!referencePage) {
+        results.push({
+          pageName,
+          diffPercent: 100,
+          diffScore: 0,
+          studentScreenshotUrl,
+          referenceScreenshotUrl: null,
+          diffImageUrl: null,
+          error: 'Unexpected extra student page'
+        });
+        continue;
+      }
+
+      if (!localPagePath) {
+        results.push({
+          pageName,
+          diffPercent: 100,
+          diffScore: 0,
+          studentScreenshotUrl: null,
+          referenceScreenshotUrl: referencePage.url,
+          diffImageUrl: null,
+          error: 'Student page not found'
+        });
+        continue;
+      }
+
+      let referenceBuffer;
+      try {
+        referenceBuffer = await downloadImageAsBuffer(referencePage.url);
+      } catch (err) {
+        console.error('Failed to download reference screenshot:', err.message);
+        results.push({
+          pageName,
+          diffPercent: 100,
+          diffScore: 0,
+          studentScreenshotUrl,
+          referenceScreenshotUrl: referencePage.url,
+          diffImageUrl: null,
+          error: 'Reference screenshot download failed'
+        });
+        continue;
+      }
+
+      const img1 = PNG.sync.read(referenceBuffer);
+      const img2 = PNG.sync.read(Buffer.from(screenshotBuffer));
+
+      if (img1.width !== img2.width || img1.height !== img2.height) {
+        console.warn('Screenshot dimension mismatch — visual test returns 0');
+        results.push({
+          pageName,
+          diffPercent: 100,
+          diffScore: 0,
+          studentScreenshotUrl,
+          referenceScreenshotUrl: referencePage.url,
+          diffImageUrl: null,
+          error: 'Screenshot dimension mismatch'
+        });
+        continue;
+      }
+
+      toGrayscale(img1);
+      toGrayscale(img2);
+
+      const { width, height } = img1;
+      const diff = new PNG({ width, height });
+      const numMismatchedPixels = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.15 });
+
+      const totalPixels = width * height;
+      const diffPercent = Math.round((numMismatchedPixels / totalPixels) * 10000) / 100;
+      const diffScore = Math.max(0, 100 - diffPercent);
+
+      let diffImageUrl = null;
+      try {
+        const diffBuffer = PNG.sync.write(diff);
+        diffImageUrl = await uploadScreenshot(
+          diffBuffer,
+          `submissions/${assignmentId}`,
+          `diff_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}`
+        );
+      } catch (err) {
+        console.error('Failed to upload diff image:', err.message);
+      }
+
+      results.push({
+        pageName,
+        diffPercent,
+        diffScore,
+        studentScreenshotUrl,
+        referenceScreenshotUrl: referencePage.url,
+        diffImageUrl
+      });
+    }
+  } finally {
+    await context.close();
   }
 
-  // Download reference image from Cloudinary
-  let referenceBuffer;
-  try {
-    referenceBuffer = await downloadImageAsBuffer(referenceScreenshotUrl);
-  } catch (err) {
-    console.error('Failed to download reference screenshot:', err.message);
-    return { ...noBaseline, studentScreenshotUrl };
-  }
+  if (results.length === 0) return noBaseline;
 
-  const img1 = PNG.sync.read(referenceBuffer);
-  const img2 = PNG.sync.read(Buffer.from(screenshotBuffer));
+  const mainResult = results.find((result) =>
+    referencePages.find((pageRef) => pageRef.pageName === result.pageName)?.isMain
+  ) || results[0];
 
-  if (img1.width !== img2.width || img1.height !== img2.height) {
-    console.warn('Screenshot dimension mismatch — visual test returns 0');
-    return { diffPercent: 100, diffScore: 0, studentScreenshotUrl, referenceScreenshotUrl, diffImageUrl: null };
-  }
+  const avgDiffPercent = parseFloat(
+    (results.reduce((sum, result) => sum + (result.diffPercent ?? 100), 0) / results.length).toFixed(2)
+  );
+  const avgDiffScore = parseFloat(
+    (results.reduce((sum, result) => sum + (result.diffScore ?? 0), 0) / results.length).toFixed(2)
+  );
 
-  // Convert both images to grayscale before comparison
-  // This makes layout/structure differences dominant; color differences are ignored
-  toGrayscale(img1);
-  toGrayscale(img2);
-
-  const { width, height } = img1;
-  const diff = new PNG({ width, height });
-  // threshold 0.15 is slightly more tolerant after grayscale conversion
-  const numMismatchedPixels = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.15 });
-
-  const totalPixels = width * height;
-  const diffPercent = Math.round((numMismatchedPixels / totalPixels) * 10000) / 100;
-  const diffScore = Math.max(0, 100 - diffPercent);
-
-  // Upload diff image to Cloudinary
-  let diffImageUrl = null;
-  try {
-    const diffBuffer = PNG.sync.write(diff);
-    diffImageUrl = await uploadScreenshot(
-      diffBuffer,
-      `submissions/${assignmentId}`,
-      `diff_${submissionId}`
-    );
-  } catch (err) {
-    console.error('Failed to upload diff image:', err.message);
-  }
-
-  return { diffPercent, diffScore, studentScreenshotUrl, referenceScreenshotUrl, diffImageUrl };
+  return {
+    diffPercent: avgDiffPercent,
+    diffScore: avgDiffScore,
+    studentScreenshotUrl: mainResult.studentScreenshotUrl ?? null,
+    referenceScreenshotUrl: mainResult.referenceScreenshotUrl ?? null,
+    diffImageUrl: mainResult.diffImageUrl ?? null,
+    tests: results
+  };
 }

@@ -27,12 +27,33 @@ import { runInteractionTests } from './tests/interactionTests.js';
 import { runVisualTest } from './visualTest.js';
 import { runLighthouse } from './lighthouseRunner.js';
 import { calculateScore } from './scoreCalculator.js';
+import { getMainFile, mergeFilesByType, normalizeStoredFiles } from '../utils/projectFiles.js';
 
 const redisPub = new IORedis({
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT) || 6379,
   maxRetriesPerRequest: null
 });
+
+function resolveReferencePages(assignment) {
+  const pageScreenshots = Array.isArray(assignment.referencePageScreenshots)
+    ? assignment.referencePageScreenshots.filter((page) => page?.pageName && page?.url)
+    : [];
+
+  if (pageScreenshots.length > 0) {
+    return pageScreenshots;
+  }
+
+  if (assignment.referenceScreenshotUrl) {
+    return [{
+      pageName: getMainFile(assignment.files, 'html')?.name || 'index.html',
+      url: assignment.referenceScreenshotUrl,
+      isMain: true
+    }];
+  }
+
+  return [];
+}
 
 export async function runEvaluation(submissionId, assignmentId) {
   const [submission, assignment] = await Promise.all([
@@ -43,11 +64,14 @@ export async function runEvaluation(submissionId, assignmentId) {
   if (!submission) throw new Error(`Submission ${submissionId} not found`);
   if (!assignment) throw new Error(`Assignment ${assignmentId} not found`);
 
-  const { html, css, js } = submission.files;
+  const files = normalizeStoredFiles(submission.files);
+  const mainHtml = getMainFile(files, 'html');
+  const mergedCss = mergeFilesByType(files, 'css');
+  const mergedJs = mergeFilesByType(files, 'js');
   const spec = assignment.evalSpec;
 
   // ── 1. Build temp file ─────────────────────────────────────────────────
-  const { filePath, dir } = await buildPage(submissionId, { html, css: css || '', js: js || '' });
+  const { filePath, dir, pageFilePaths } = await buildPage(submissionId, files);
   const fileUrl = `file://${filePath}`;
 
   let linterResult = null;
@@ -59,7 +83,7 @@ export async function runEvaluation(submissionId, assignmentId) {
   try {
     // ── 2. Linters (no browser needed) ──────────────────────────────────
     console.log(`[${submissionId}] Running linters...`);
-    linterResult = await runLinters(html, css || '', js || '');
+    linterResult = await runLinters(mainHtml?.content || '', mergedCss, mergedJs);
     console.log(`[${submissionId}] Linter score: ${linterResult.score}/10`);
 
     // ── 3. Lighthouse (needs its own browser) ────────────────────────────
@@ -90,9 +114,13 @@ export async function runEvaluation(submissionId, assignmentId) {
       // ── 7. Visual test (20 marks — grayscale pixelmatch) ────────────────
       console.log(`[${submissionId}] Visual test...`);
       visualResult = await runVisualTest(
-        browser, fileUrl,
-        submissionId, assignmentId,
-        assignment.referenceScreenshotUrl
+        browser,
+        {
+          pageFilePaths,
+          submissionId,
+          assignmentId,
+          referencePages: resolveReferencePages(assignment)
+        }
       );
     } finally {
       await browser.close();

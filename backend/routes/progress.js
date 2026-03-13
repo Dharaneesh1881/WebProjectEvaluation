@@ -5,6 +5,7 @@ import EvaluationRun from '../models/EvaluationRun.js';
 import User from '../models/User.js';
 import Assignment from '../models/Assignment.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { normalizeStoredFiles } from '../utils/projectFiles.js';
 
 const router = Router();
 
@@ -44,15 +45,11 @@ router.get('/progress/:assignmentId/code', requireAuth, async (req, res) => {
         assignmentId: req.params.assignmentId
     });
     if (!record?.bestSubmissionId) {
-        return res.json({ html: '', css: '', js: '' });
+        return res.json({ files: [] });
     }
     const submission = await Submission.findOne({ submissionId: record.bestSubmissionId });
-    if (!submission) return res.json({ html: '', css: '', js: '' });
-    return res.json({
-        html: submission.files.html || '',
-        css: submission.files.css || '',
-        js: submission.files.js || ''
-    });
+    if (!submission) return res.json({ files: [] });
+    return res.json({ files: normalizeStoredFiles(submission.files) });
 });
 
 // ── Leaderboard (teacher-only) ───────────────────────────────────────────────
@@ -61,7 +58,7 @@ router.get('/progress/:assignmentId/code', requireAuth, async (req, res) => {
 router.get('/leaderboard', requireAuth, requireRole('teacher'), async (req, res) => {
     // Get all active assignments
     const assignments = await Assignment.find({ isActive: true })
-        .select('_id title description referenceScreenshotUrl')
+        .select('_id title description referenceScreenshotUrl referencePageScreenshots')
         .sort({ createdAt: -1 });
 
     // Get all student progress records in one query
@@ -108,6 +105,7 @@ router.get('/leaderboard', requireAuth, requireRole('teacher'), async (req, res)
             title: a.title,
             description: a.description,
             referenceScreenshotUrl: a.referenceScreenshotUrl,
+            referencePageScreenshots: a.referencePageScreenshots || [],
             totalStudents: ranked.length,
             completedCount: ranked.filter(s => s.completed).length,
             avgScore: ranked.length
@@ -225,11 +223,7 @@ router.get('/teacher/student-submission/:assignmentId/:studentId', requireAuth, 
 
     return res.json({
         student: user ? { name: user.name, email: user.email } : null,
-        files: {
-            html: submission.files.html || '',
-            css: submission.files.css || '',
-            js: submission.files.js || ''
-        },
+        files: normalizeStoredFiles(submission.files),
         result: evalRun || null,
         bestScore: progress.bestScore,
         completed: progress.completed,

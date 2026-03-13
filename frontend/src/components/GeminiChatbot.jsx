@@ -95,10 +95,10 @@ export function GeminiChatbot() {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        <div className="fixed bottom-4 left-4 z-40 flex flex-col items-start sm:bottom-5 sm:left-auto sm:right-5 sm:items-end lg:bottom-6 lg:right-6">
             {/* Chat Window */}
             {isOpen && (
-                <div className="w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-6rem)] bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+                <div className="w-[min(360px,calc(100vw-2rem))] h-[min(500px,calc(100vh-7rem))] bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl shadow-2xl flex flex-col mb-3 sm:mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
 
                     {/* Header */}
                     <div className="px-4 py-3 bg-gradient-to-r from-[#2f80ed]/20 to-[#4e9af1]/10 border-b border-[var(--border-color)] flex justify-between items-center shrink-0">
@@ -189,7 +189,7 @@ export function GeminiChatbot() {
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="w-14 h-14 bg-gradient-to-tr from-[#2f80ed] to-[#4e9af1] hover:shadow-[0_0_20px_rgba(78,154,241,0.4)] text-[var(--text-strong)] rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 group"
+                    className="h-12 w-12 sm:h-14 sm:w-14 bg-gradient-to-tr from-[#2f80ed] to-[#4e9af1] hover:shadow-[0_0_20px_rgba(78,154,241,0.4)] text-[var(--text-strong)] rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 group"
                 >
                     <div className="group-hover:rotate-12 transition-transform duration-300">
                         <SparklesIcon />

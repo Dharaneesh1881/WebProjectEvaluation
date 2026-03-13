@@ -1,13 +1,21 @@
 import { Router } from 'express';
 import multer from 'multer';
+import path from 'path';
+import unzipper from 'unzipper';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinary.js';
+import { validateAndNormalizeFiles, ProjectFilesError } from '../utils/projectFiles.js';
 
 const router = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+const projectZipUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 function runSingleUpload(req, res) {
@@ -18,6 +26,60 @@ function runSingleUpload(req, res) {
     });
   });
 }
+
+function runProjectZipUpload(req, res) {
+  return new Promise((resolve, reject) => {
+    projectZipUpload.single('zip')(req, res, (err) => {
+      if (err) return reject(err);
+      return resolve();
+    });
+  });
+}
+
+async function extractProjectFilesFromZip(buffer) {
+  const archive = await unzipper.Open.buffer(buffer);
+  const extracted = [];
+
+  for (const entry of archive.files) {
+    if (entry.type !== 'File') continue;
+    if (entry.path.startsWith('__MACOSX/')) continue;
+
+    const name = path.basename(entry.path);
+    if (!name || name.startsWith('.')) continue;
+
+    const content = (await entry.buffer()).toString('utf8');
+    extracted.push({ name, content });
+  }
+
+  return validateAndNormalizeFiles(extracted);
+}
+
+router.post('/project-files/zip', requireAuth, async (req, res) => {
+  try {
+    await runProjectZipUpload(req, res);
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'zip file is required' });
+    }
+
+    const normalized = await extractProjectFilesFromZip(req.file.buffer);
+    return res.json({
+      files: normalized.files,
+      warnings: normalized.warnings
+    });
+  } catch (error) {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'ZIP file exceeds 5MB limit' });
+    }
+
+    if (error instanceof ProjectFilesError) {
+      return res.status(error.status).json({ error: error.message, details: error.details || [] });
+    }
+
+    console.error('Project ZIP upload failed:', error);
+    return res.status(500).json({ error: error.message || 'ZIP upload failed' });
+  }
+});
 
 router.post('/uploads', requireAuth, async (req, res) => {
   try {

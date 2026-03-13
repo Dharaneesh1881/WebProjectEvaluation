@@ -2,11 +2,19 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
+import { MultiFileUpload } from '../components/MultiFileUpload.jsx';
+import { FileList } from '../components/FileList.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { AnalyticsView } from '../components/AnalyticsView.jsx';
 import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard, getTeacherStudentSubmission } from '../api/index.js';
 import { FiAward, FiRefreshCw, FiBookOpen, FiPlus, FiLogOut, FiChevronRight, FiBarChart2, FiList, FiPieChart, FiSun, FiMoon } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
+import {
+  hasHtmlFile,
+  removeProjectFile,
+  setProjectMainFile,
+  updateProjectFileContent
+} from '../utils/projectFiles.js';
 
 function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -480,29 +488,29 @@ function StudentDetailView({ assignmentId, studentId, onBack }) {
   if (!data) return null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)] -mt-4">
+    <div className="flex min-h-[calc(100vh-180px)] flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4 shrink-0 px-2">
+      <div className="mb-4 flex flex-wrap items-start gap-3 shrink-0 px-1">
         <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline shrink-0">← Back</button>
-        <div>
-          <h2 className="text-xl font-bold text-[var(--text-strong)] leading-tight">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-[var(--text-strong)] leading-tight flex flex-wrap items-center gap-2">
             {data.student?.name || 'Student'}&apos;s Submission
             {data.completed ? (
-              <span className="ml-3 align-middle inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
+              <span className="align-middle inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
                 <MdCheckCircle size={10} /> Done
               </span>
             ) : (
-              <span className="ml-3 align-middle text-[10px] font-bold px-2 py-0.5 bg-[var(--border-color)] text-[var(--text-faint)] rounded-full">In progress</span>
+              <span className="align-middle text-[10px] font-bold px-2 py-0.5 bg-[var(--border-color)] text-[var(--text-faint)] rounded-full">In progress</span>
             )}
           </h2>
-          <p className="text-xs text-[var(--text-muted)]">{data.student?.email || studentId}</p>
+          <p className="text-xs text-[var(--text-muted)] break-all">{data.student?.email || studentId}</p>
         </div>
       </div>
 
       {/* Two Pane Split */}
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden border border-[var(--border-color)] rounded-xl bg-[var(--bg-base)] shadow-lg">
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row overflow-hidden border border-[var(--border-color)] rounded-2xl bg-[var(--bg-base)] shadow-lg">
         {/* Left: Code */}
-        <section className="flex flex-col md:w-[50%] border-b md:border-b-0 md:border-r border-[var(--border-color)] bg-[var(--bg-surface)]">
+        <section className="flex min-h-[340px] min-w-0 flex-1 flex-col border-b xl:border-b-0 xl:border-r border-[var(--border-color)] bg-[var(--bg-surface)] xl:basis-[54%]">
           <div className="px-4 py-3 bg-[var(--bg-surface-alt)] border-b border-[var(--border-color)] flex justify-between items-center text-xs shrink-0">
             <span className="font-semibold text-[var(--text-strong)]">Submitted Code</span>
             <span className="text-[var(--text-muted)] font-mono">Attempts: {data.attempts ?? 1}</span>
@@ -511,7 +519,7 @@ function StudentDetailView({ assignmentId, studentId, onBack }) {
         </section>
 
         {/* Right: Results Panel */}
-        <section className="flex-1 overflow-y-auto p-4 bg-[var(--bg-surface)] custom-scrollbar">
+        <section className="min-h-[320px] flex-1 overflow-y-auto p-4 sm:p-5 bg-[var(--bg-surface)] custom-scrollbar xl:basis-[46%]">
           {data.result ? (
             <ResultsPanel status="done" result={data.result} />
           ) : (
@@ -540,12 +548,14 @@ export default function TeacherDashboard() {
 
   // Create form state
   const [form, setForm] = useState({ title: '', description: '' });
-  const [files, setFiles] = useState({ html: '', css: '', js: '' });
+  const [files, setFiles] = useState([]);
+  const [selectedFileName, setSelectedFileName] = useState(null);
   const [testsJson, setTestsJson] = useState('');
   const [testsJsonError, setTestsJsonError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState(null);
   const [createError, setCreateError] = useState('');
+  const [createFilesMessage, setCreateFilesMessage] = useState(null);
 
   useEffect(() => {
     if (view === 'list') {
@@ -571,8 +581,8 @@ export default function TeacherDashboard() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.title || !files.html) {
-      setCreateError('Title and HTML are required.');
+    if (!form.title || !hasHtmlFile(files)) {
+      setCreateError('Title and at least one HTML file are required.');
       return;
     }
 
@@ -594,7 +604,7 @@ export default function TeacherDashboard() {
     setCreateError('');
     setCreating(true);
     try {
-      const result = await createAssignment({ ...form, ...files, functionalityTests, interactionTests });
+      const result = await createAssignment({ ...form, files, functionalityTests, interactionTests });
       setCreateResult(result);
     } catch (err) {
       setCreateError(err.message);
@@ -643,8 +653,10 @@ export default function TeacherDashboard() {
                   setView('create');
                   setCreateResult(null); setCreateError('');
                   setForm({ title: '', description: '' });
-                  setFiles({ html: '', css: '', js: '' });
+                  setFiles([]);
+                  setSelectedFileName(null);
                   setTestsJson(''); setTestsJsonError('');
+                  setCreateFilesMessage(null);
                 } else {
                   setView(item.id);
                 }
@@ -677,7 +689,7 @@ export default function TeacherDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top bar — context title only */}
-        <header className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-8 py-3 flex items-center justify-between sticky top-0 z-10">
+        <header className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <h1 className="font-bold text-[var(--text-strong)] text-sm capitalize">
               {view === 'list' ? 'Assignments' :
@@ -701,7 +713,7 @@ export default function TeacherDashboard() {
         <main className="flex-1 overflow-y-auto">
           {/* full-height views (no padding wrapper) */}
           {view === 'studentDetail' && selectedAssignmentId && selectedStudentId ? (
-            <div className="px-8 py-8">
+            <div className="px-4 py-6 sm:px-6 lg:px-8 sm:py-8">
               <StudentDetailView
                 assignmentId={selectedAssignmentId}
                 studentId={selectedStudentId}
@@ -709,7 +721,7 @@ export default function TeacherDashboard() {
               />
             </div>
           ) : (
-            <div className="px-8 py-8">
+            <div className="px-4 py-6 sm:px-6 lg:px-8 sm:py-8">
 
               {/* ── ANALYTICS VIEW ── */}
               {view === 'analytics' && (
@@ -795,62 +807,105 @@ export default function TeacherDashboard() {
                       </button>
                     </div>
                   ) : (
-                    <form onSubmit={handleCreate} className="space-y-4">
-                      {/* Title — full width */}
-                      <div>
-                        <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Assignment title *</label>
-                        <input
-                          type="text"
-                          required
-                          value={form.title}
-                          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                          className="w-full px-3 py-2.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1]"
-                          placeholder="e.g. Quiz App Recreation"
-                        />
-                      </div>
+                    <form onSubmit={handleCreate} className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <div className="space-y-6">
+                        <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5">
+                          <h3 className="text-sm font-semibold text-[var(--text-strong)] mb-4">Assignment Details</h3>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Assignment title *</label>
+                              <input
+                                type="text"
+                                required
+                                value={form.title}
+                                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                                className="w-full px-3 py-2.5 bg-[var(--bg-base)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1]"
+                                placeholder="e.g. Quiz App Recreation"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+                                Description
+                                <span className="ml-1 text-[var(--text-faintest)] font-normal normal-case">— explain the assignment for students</span>
+                              </label>
+                              <textarea
+                                value={form.description}
+                                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                                rows={12}
+                                className="w-full px-3 py-3 bg-[var(--bg-base)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1] resize-y leading-relaxed"
+                                placeholder={"Describe what students need to build.\n\nExample:\n1. Overview — what the app does\n2. Requirements — specific features expected\n3. Examples — any input/output examples\n4. Notes — constraints or hints"}
+                              />
+                            </div>
+                          </div>
+                        </section>
 
-                      {/* Description — full width, tall textarea, directly below title */}
-                      <div>
-                        <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
-                          Description
-                          <span className="ml-1 text-[var(--text-faintest)] font-normal normal-case">— explain the assignment for students</span>
-                        </label>
-                        <textarea
-                          value={form.description}
-                          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                          rows={12}
-                          className="w-full px-3 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1] resize-y leading-relaxed"
-                          placeholder={"Describe what students need to build.\n\nExample:\n1. Overview — what the app does\n2. Requirements — specific features expected\n3. Examples — any input/output examples\n4. Notes — constraints or hints"}
-                        />
-                      </div>
+                        <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5">
+                          <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+                            Tests JSON
+                            <span className="text-[var(--text-faint)] font-normal"> — functionalityTests (40 marks) and interactionTests (15 marks)</span>
+                          </label>
+                          <textarea rows={12} value={testsJson}
+                            onChange={e => { setTestsJson(e.target.value); setTestsJsonError(''); }}
+                            placeholder={EDIT_TESTS_PLACEHOLDER}
+                            className="w-full px-3 py-2.5 bg-[var(--bg-base)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-muted)] font-mono placeholder:text-[var(--border-color)] focus:outline-none focus:border-[#4e9af1] resize-y"
+                            spellCheck={false} />
+                          {testsJsonError && <p className="text-xs text-[#f85149] mt-1">{testsJsonError}</p>}
+                        </section>
 
-
-                      <div>
-                        <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Reference code *</label>
-                        <p className="text-xs text-[var(--text-faint)] mb-2">Paste the original/reference HTML, CSS, and JS. Tests will be auto-generated from this.</p>
-                        <div className="h-[400px] flex flex-col border border-[var(--border-color)] rounded-xl overflow-hidden">
-                          <CodeEditor files={files} onChange={(tab, val) => setFiles(f => ({ ...f, [tab]: val }))} />
+                        <div className="flex flex-wrap items-center gap-3">
+                          {createError && <p className="text-xs text-[#f85149]">{createError}</p>}
+                          <button type="submit" disabled={creating}
+                            className="px-6 py-2.5 bg-[#2f80ed] text-[var(--text-strong)] text-sm font-semibold rounded-lg hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            {creating ? 'Creating & capturing screenshot…' : 'Create Assignment'}
+                          </button>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
-                          Tests JSON — <span className="text-[var(--text-faint)] font-normal">functionalityTests (40 marks) and interactionTests (15 marks)</span>
-                        </label>
-                        <textarea rows={10} value={testsJson}
-                          onChange={e => { setTestsJson(e.target.value); setTestsJsonError(''); }}
-                          placeholder={EDIT_TESTS_PLACEHOLDER}
-                          className="w-full px-3 py-2.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-muted)] font-mono placeholder:text-[var(--border-color)] focus:outline-none focus:border-[#4e9af1] resize-y"
-                          spellCheck={false} />
-                        {testsJsonError && <p className="text-xs text-[#f85149] mt-1">{testsJsonError}</p>}
-                      </div>
-
-                      {createError && <p className="text-xs text-[#f85149]">{createError}</p>}
-
-                      <button type="submit" disabled={creating}
-                        className="px-6 py-2.5 bg-[#2f80ed] text-[var(--text-strong)] text-sm font-semibold rounded-lg hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        {creating ? 'Creating & capturing screenshot…' : 'Create Assignment'}
-                      </button>
+                      <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 min-h-0 flex flex-col">
+                        <div className="mb-4">
+                          <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Reference code *</label>
+                          <p className="text-xs text-[var(--text-faint)]">Upload the reference project files. The backend will bundle them into one self-contained page before baseline capture and evaluation.</p>
+                        </div>
+                        <div className="space-y-4 flex-1 min-h-0 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
+                          <MultiFileUpload
+                            files={files}
+                            onChange={(nextFiles) => {
+                              setFiles(nextFiles);
+                              if (!nextFiles.some((file) => file.name === selectedFileName)) {
+                                setSelectedFileName(nextFiles[0]?.name || null);
+                              }
+                            }}
+                            onMessage={setCreateFilesMessage}
+                            disabled={creating}
+                          />
+                          {createFilesMessage && (
+                            <p className={`text-xs ${createFilesMessage.tone === 'error' ? 'text-[#f85149]' : createFilesMessage.tone === 'success' ? 'text-[#3fb950]' : 'text-[var(--text-faint)]'}`}>
+                              {createFilesMessage.message}
+                            </p>
+                          )}
+                          <FileList
+                            files={files}
+                            selectedFileName={selectedFileName}
+                            onSelect={setSelectedFileName}
+                            onRemove={(fileName) => {
+                              const nextFiles = removeProjectFile(files, fileName);
+                              setFiles(nextFiles);
+                              if (selectedFileName === fileName) {
+                                setSelectedFileName(nextFiles[0]?.name || null);
+                              }
+                            }}
+                            onSetMain={(fileName) => setFiles(setProjectMainFile(files, fileName))}
+                          />
+                          <div className="min-h-[360px] flex-1 flex flex-col border border-[var(--border-color)] rounded-xl overflow-hidden">
+                            <CodeEditor
+                              files={files}
+                              selectedFileName={selectedFileName}
+                              onSelectFile={setSelectedFileName}
+                              onChange={(fileName, value) => setFiles(updateProjectFileContent(files, fileName, value))}
+                            />
+                          </div>
+                        </div>
+                      </section>
                     </form>
                   )}
                 </>

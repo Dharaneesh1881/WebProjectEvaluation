@@ -82,7 +82,7 @@ export function calculateScore({ linterResult, functionalityResult, interactionR
     studentScreenshotUrl:   visualResult?.studentScreenshotUrl   ?? null,
     referenceScreenshotUrl: visualResult?.referenceScreenshotUrl ?? null,
     diffImageUrl:           visualResult?.diffImageUrl           ?? null,
-    tests:                  []
+    tests:                  visualResult?.tests                  ?? []
   };
 
   // ── Performance (max 15) ──────────────────────────────────────────────────
