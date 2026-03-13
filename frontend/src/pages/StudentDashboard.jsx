@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
+import { GeminiChatbot } from '../components/GeminiChatbot.jsx';
 import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
 import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
@@ -798,6 +799,8 @@ export default function StudentDashboard() {
           );
         })()}
       </div>
+
+      <GeminiChatbot />
     </div>
   );
 }
