@@ -19,7 +19,7 @@ export function VisualDiffViewer({ referenceScreenshotUrl, studentScreenshotUrl,
 
   return (
     <div className="mt-2">
-      <div className="flex border-b border-[#2a2a4a] mb-3">
+      <div className="flex border-b border-[var(--border-color)] mb-3">
         {TABS.map(tab => (
           <button
             key={tab.key}
@@ -27,7 +27,7 @@ export function VisualDiffViewer({ referenceScreenshotUrl, studentScreenshotUrl,
             className={`px-4 py-1.5 text-xs font-semibold border-b-2 transition-colors
               ${active === tab.key
                 ? 'text-[#4e9af1] border-[#4e9af1]'
-                : 'text-[#555] border-transparent hover:text-[#888]'}`}
+                : 'text-[var(--text-faint)] border-transparent hover:text-[var(--text-muted)]'}`}
           >
             {tab.label}
           </button>
@@ -38,10 +38,10 @@ export function VisualDiffViewer({ referenceScreenshotUrl, studentScreenshotUrl,
         <img
           src={activeUrl}
           alt={active}
-          className="w-full rounded-lg border border-[#2a2a4a]"
+          className="w-full rounded-lg border border-[var(--border-color)]"
         />
       ) : (
-        <div className="w-full h-40 rounded-lg border border-[#2a2a4a] flex items-center justify-center text-[#555] text-xs">
+        <div className="w-full h-40 rounded-lg border border-[var(--border-color)] flex items-center justify-center text-[var(--text-faint)] text-xs">
           {active === 'reference' ? 'No reference screenshot' :
            active === 'student'   ? 'No student screenshot' :
            'No diff image available'}
@@ -49,7 +49,7 @@ export function VisualDiffViewer({ referenceScreenshotUrl, studentScreenshotUrl,
       )}
 
       {diffPercent !== undefined && (
-        <p className="mt-2 text-xs text-[#666]">Pixel difference: {diffPercent}%</p>
+        <p className="mt-2 text-xs text-[var(--text-faint)]">Pixel difference: {diffPercent}%</p>
       )}
     </div>
   );

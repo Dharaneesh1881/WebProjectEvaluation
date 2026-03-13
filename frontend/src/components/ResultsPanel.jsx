@@ -112,10 +112,10 @@ function ScoreBarChart({ breakdown }) {
         return (
           <div key={key}>
             <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[10px] text-[#888]">{label}</span>
+              <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
               <span className="text-[10px] font-bold" style={{ color: col }}>{sc}/{max}</span>
             </div>
-            <div className="h-1.5 bg-[#0d0d1a] rounded-full overflow-hidden">
+            <div className="h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{ width: `${pct}%`, background: col }}
@@ -262,10 +262,10 @@ function SmartSuggestions({ breakdown, totalScore }) {
   const levelLabel = { low: 'Needs Work', mid: 'Improve', good: 'Good' };
 
   return (
-    <div className="rounded-xl bg-[#1a1a2e] border border-[#2a2a4a] overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#2a2a4a] flex items-center gap-2">
+    <div className="rounded-xl bg-[var(--bg-surface-alt)] border border-[var(--border-color)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center gap-2">
         <MdLightbulb size={16} className="text-[#f0c040] shrink-0" />
-        <h3 className="text-sm font-semibold text-white">Analysis &amp; Suggestions</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-strong)]">Analysis &amp; Suggestions</h3>
         <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${totalScore >= 80 ? 'bg-[#3fb950]/15 text-[#3fb950]' :
           totalScore >= 50 ? 'bg-[#f0a500]/15 text-[#f0a500]' :
             'bg-[#f85149]/15 text-[#f85149]'
@@ -276,7 +276,7 @@ function SmartSuggestions({ breakdown, totalScore }) {
 
       <div className="p-4 space-y-3">
         {/* Overall summary */}
-        <p className="flex items-start gap-2 text-xs text-[#888] leading-relaxed">
+        <p className="flex items-start gap-2 text-xs text-[var(--text-muted)] leading-relaxed">
           {totalScore >= 80
             ? <><MdStar size={14} className="text-[#f0c040] shrink-0 mt-0.5" />
               Outstanding work! You&apos;ve scored well across most categories. Focus on the remaining areas to reach a perfect score.</>
@@ -300,12 +300,12 @@ function SmartSuggestions({ breakdown, totalScore }) {
             <div key={key} className={`rounded-lg border p-3 ${st.bg} ${st.border}`}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="flex items-center" style={{ color: st.dot }}>{cfg.icon}</span>
-                <span className="text-xs font-bold text-white">{cfg.title}</span>
+                <span className="text-xs font-bold text-[var(--text-strong)]">{cfg.title}</span>
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${st.badge}`}>
                   {levelLabel[level]} · {sc}/{max}
                 </span>
                 {/* Mini inline bar */}
-                <div className="ml-auto w-16 h-1.5 bg-[#0d0d1a] rounded-full overflow-hidden">
+                <div className="ml-auto w-16 h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden">
                   <div className="h-full rounded-full" style={{ width: `${pct}%`, background: st.dot }} />
                 </div>
               </div>
@@ -351,7 +351,7 @@ function LinterDetail({ b }) {
         const pct = max > 0 ? (data.score / max) * 100 : 0;
         const col = scoreColor(pct);
         return (
-          <div key={label} className="bg-[#0d0d1a] rounded-lg p-3">
+          <div key={label} className="bg-[var(--bg-surface)] rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#999]">{label}</span>
               <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ color: col, background: `${col}18` }}>
@@ -386,14 +386,14 @@ function LinterDetail({ b }) {
 function FnTestRow({ t }) {
   const col = t.passed ? '#3fb950' : '#f85149';
   return (
-    <div className="py-1.5 border-b border-[#1a1a2e] last:border-0">
+    <div className="py-1.5 border-b border-[var(--bg-surface-alt)] last:border-0">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2 flex-1 min-w-0">
           <span className="text-sm font-bold mt-0.5 flex-shrink-0" style={{ color: col }}>
             {t.passed ? '✓' : '✗'}
           </span>
           <div className="min-w-0">
-            <p className="text-xs text-[#ccc] font-medium truncate">{t.name}</p>
+            <p className="text-xs text-[var(--text-muted)] font-medium truncate">{t.name}</p>
             {!t.passed && t.failHint && (
               <p className="text-[10px] text-[#f0a500] mt-0.5 leading-snug">{t.failHint}</p>
             )}
@@ -433,11 +433,11 @@ function PerformanceDetail({ b }) {
 
   return (
     <div className="px-4 pb-4">
-      <div className="bg-[#0d0d1a] rounded-lg overflow-hidden">
+      <div className="bg-[var(--bg-surface)] rounded-lg overflow-hidden">
         {items.map((item, i) => (
-          <div key={i} className="flex justify-between px-3 py-2 border-b border-[#1a1a2e] last:border-0">
-            <span className="text-xs text-[#888]">{item.label}</span>
-            <span className="text-xs text-[#ccc] font-mono">{item.value}</span>
+          <div key={i} className="flex justify-between px-3 py-2 border-b border-[var(--bg-surface-alt)] last:border-0">
+            <span className="text-xs text-[var(--text-muted)]">{item.label}</span>
+            <span className="text-xs text-[var(--text-muted)] font-mono">{item.value}</span>
           </div>
         ))}
         {b.source === 'heuristic' && (
@@ -455,8 +455,8 @@ export function ResultsPanel({ status, result }) {
 
   if (status === 'pending' || status === 'processing') {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 pt-12 text-[#888]">
-        <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+      <div className="flex flex-col items-center justify-center gap-4 pt-12 text-[var(--text-muted)]">
+        <div className="w-9 h-9 rounded-full border-[3px] border-[var(--border-color)] border-t-[#4e9af1] animate-spin" />
         <p className="text-sm">
           {status === 'pending' ? 'Queued for evaluation…' : 'Evaluating your code…'}
         </p>
@@ -481,14 +481,14 @@ export function ResultsPanel({ status, result }) {
     <div className="max-w-2xl space-y-4">
 
       {/* ── Total score card ── */}
-      <div className="p-4 rounded-xl bg-[#1a1a2e] border border-[#2a2a4a]">
+      <div className="p-4 rounded-xl bg-[var(--bg-surface-alt)] border border-[var(--border-color)]">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-lg font-bold text-white">Total Score</h2>
+          <h2 className="text-lg font-bold text-[var(--text-strong)]">Total Score</h2>
           <span className="text-2xl font-extrabold" style={{ color: totalColor }}>
-            {totalScore} <span className="text-sm font-normal text-[#666]">/ 100</span>
+            {totalScore} <span className="text-sm font-normal text-[var(--text-faint)]">/ 100</span>
           </span>
         </div>
-        <div className="h-2.5 bg-[#2a2a4a] rounded-full overflow-hidden">
+        <div className="h-2.5 bg-[var(--border-color)] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-700 ease-out"
             style={{ width: `${Math.min(totalScore, 100)}%`, background: 'linear-gradient(90deg,#2f80ed,#56ccf2)' }}
@@ -520,10 +520,10 @@ export function ResultsPanel({ status, result }) {
         const col = scoreColor(pct);
 
         return (
-          <div key={key} className="rounded-xl bg-[#1a1a2e] border border-[#2a2a4a] overflow-hidden">
+          <div key={key} className="rounded-xl bg-[var(--bg-surface-alt)] border border-[var(--border-color)] overflow-hidden">
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a4a]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)]">
               <h3 className="text-sm font-semibold text-[#c0c0c0]">{label}</h3>
               <span className="text-sm font-bold px-2 py-0.5 rounded-md"
                 style={{ color: col, background: `${col}18` }}>
@@ -539,7 +539,7 @@ export function ResultsPanel({ status, result }) {
               <div className="px-4 py-2">
                 {b.tests && b.tests.length > 0 ? (
                   <>
-                    <p className="text-[10px] text-[#555] mb-2">
+                    <p className="text-[10px] text-[var(--text-faint)] mb-2">
                       Passed {b.tests.filter(t => t.passed).length}/{b.tests.length} test cases
                       {b.rawMax !== 40 && b.rawMax > 0 && (
                         <span className="ml-1">(scaled from {b.earned}/{b.rawMax} → {b.score}/40)</span>
@@ -550,7 +550,7 @@ export function ResultsPanel({ status, result }) {
                     </div>
                   </>
                 ) : (
-                  <p className="py-3 text-xs text-[#555]">No functionality tests defined for this assignment.</p>
+                  <p className="py-3 text-xs text-[var(--text-faint)]">No functionality tests defined for this assignment.</p>
                 )}
               </div>
             )}
@@ -560,7 +560,7 @@ export function ResultsPanel({ status, result }) {
               <div className="px-4 py-2 overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="text-[#555] border-b border-[#2a2a4a]">
+                    <tr className="text-[var(--text-faint)] border-b border-[var(--border-color)]">
                       <th className="text-left text-[10px] pb-1.5 pr-3 font-semibold uppercase tracking-wider">Test</th>
                       <th className="text-center text-[10px] pb-1.5 pr-3 font-semibold uppercase tracking-wider">Result</th>
                       <th className="text-right text-[10px] pb-1.5 font-semibold uppercase tracking-wider">Points</th>
@@ -576,8 +576,8 @@ export function ResultsPanel({ status, result }) {
             {/* ── Visual: diff images ── */}
             {key === 'visual' && (
               <div className="px-4 pb-4">
-                <p className="text-[10px] text-[#555] mt-2 mb-3">
-                  Pixel difference: <span className="text-[#ccc]">{b.diffPercent}%</span>
+                <p className="text-[10px] text-[var(--text-faint)] mt-2 mb-3">
+                  Pixel difference: <span className="text-[var(--text-muted)]">{b.diffPercent}%</span>
                   <span className="ml-2">(grayscale layout comparison)</span>
                 </p>
                 <VisualDiffViewer

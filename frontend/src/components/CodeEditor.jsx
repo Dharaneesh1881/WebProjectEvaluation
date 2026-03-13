@@ -18,17 +18,17 @@ export function CodeEditor({ files, onChange, readOnly = false }) {
   const [activeTab, setActiveTab] = useState('html');
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#0d0d1a]">
+    <div className="flex-1 flex flex-col min-h-0 bg-[var(--bg-surface)]">
       {/* File tabs */}
-      <div className="flex shrink-0 border-b border-[#2a2a4a] bg-[#141424]">
+      <div className="flex shrink-0 border-b border-[var(--border-color)] bg-[#141424]">
         {TABS.map(t => (
           <button
             key={t}
             type="button"
             onClick={() => setActiveTab(t)}
             className={`px-4 py-2.5 text-xs font-semibold font-mono tracking-wider border-b-2 transition-colors ${activeTab === t
-              ? `border-[#4e9af1] bg-[#1a1a2e] ${TAB_COLORS[t]}`
-              : 'border-transparent text-[#666] hover:bg-[#1a1a2e] hover:text-[#bbb]'
+              ? `border-[#4e9af1] bg-[var(--bg-surface-alt)] ${TAB_COLORS[t]}`
+              : 'border-transparent text-[var(--text-faint)] hover:bg-[var(--bg-surface-alt)] hover:text-[#bbb]'
               }`}
           >
             {t.toUpperCase()}
@@ -45,10 +45,10 @@ export function CodeEditor({ files, onChange, readOnly = false }) {
           placeholder={PLACEHOLDERS[activeTab]}
           readOnly={readOnly}
           spellCheck={false}
-          className={`absolute inset-0 w-full h-full p-4 bg-[#0d0d1a] border-none resize-none
+          className={`absolute inset-0 w-full h-full p-4 bg-[var(--bg-surface)] border-none resize-none
                      text-[13px] font-mono leading-relaxed outline-none focus:ring-0
-                     ${readOnly ? 'text-[#888] cursor-default' : 'text-[#e0e0e0]'}
-                     placeholder-[#444] transition-colors`}
+                     ${readOnly ? 'text-[var(--text-muted)] cursor-default' : 'text-[var(--text-main)]'}
+                     placeholder-[var(--text-faintest)] transition-colors`}
           style={{
             fontFamily: '"Fira Code", "JetBrains Mono", Consolas, monospace',
             tabSize: 2

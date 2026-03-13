@@ -98,22 +98,22 @@ export function GeminiChatbot() {
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
             {/* Chat Window */}
             {isOpen && (
-                <div className="w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-6rem)] bg-[#0f0f1a] border border-[#2a2a4a] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+                <div className="w-[360px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-6rem)] bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
 
                     {/* Header */}
-                    <div className="px-4 py-3 bg-gradient-to-r from-[#2f80ed]/20 to-[#4e9af1]/10 border-b border-[#2a2a4a] flex justify-between items-center shrink-0">
+                    <div className="px-4 py-3 bg-gradient-to-r from-[#2f80ed]/20 to-[#4e9af1]/10 border-b border-[var(--border-color)] flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-[#2f80ed]/30 border border-[#2f80ed]/50 flex items-center justify-center text-[#4e9af1]">
                                 <SparklesIcon />
                             </div>
                             <div>
-                                <h3 className="text-sm font-bold text-white leading-tight">AI Assistant</h3>
-                                <p className="text-[10px] text-[#888]">Powered by Gemini</p>
+                                <h3 className="text-sm font-bold text-[var(--text-strong)] leading-tight">AI Assistant</h3>
+                                <p className="text-[10px] text-[var(--text-muted)]">Powered by Gemini</p>
                             </div>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="p-1.5 text-[#888] hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--text-strong)]/10 rounded-lg transition-colors"
                         >
                             <CloseIcon />
                         </button>
@@ -130,8 +130,8 @@ export function GeminiChatbot() {
                                 )}
                                 <div
                                     className={`max-w-[80%] px-3 py-2 text-[13px] leading-relaxed rounded-2xl ${msg.role === 'user'
-                                            ? 'bg-[#2f80ed] text-white rounded-br-sm'
-                                            : 'bg-[#1a1a2e] border border-[#2a2a4a] text-[#ddd] rounded-bl-sm'
+                                            ? 'bg-[#2f80ed] text-[var(--text-strong)] rounded-br-sm'
+                                            : 'bg-[var(--bg-surface-alt)] border border-[var(--border-color)] text-[#ddd] rounded-bl-sm'
                                         }`}
                                     style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                                 >
@@ -146,7 +146,7 @@ export function GeminiChatbot() {
                                 <div className="w-6 h-6 rounded-full bg-[#2f80ed]/20 border border-[#2f80ed]/30 flex items-center justify-center shrink-0 mr-2 mt-1">
                                     <SparklesIcon />
                                 </div>
-                                <div className="bg-[#1a1a2e] border border-[#2a2a4a] px-3 py-2.5 rounded-2xl rounded-bl-sm flex gap-1 items-center">
+                                <div className="bg-[var(--bg-surface-alt)] border border-[var(--border-color)] px-3 py-2.5 rounded-2xl rounded-bl-sm flex gap-1 items-center">
                                     <div className="w-1.5 h-1.5 bg-[#4e9af1] rounded-full animate-bounce [animation-delay:-0.3s]" />
                                     <div className="w-1.5 h-1.5 bg-[#4e9af1] rounded-full animate-bounce [animation-delay:-0.15s]" />
                                     <div className="w-1.5 h-1.5 bg-[#4e9af1] rounded-full animate-bounce" />
@@ -157,7 +157,7 @@ export function GeminiChatbot() {
                     </div>
 
                     {/* Input Area */}
-                    <div className="p-3 bg-[#0d0d1a] border-t border-[#2a2a4a] shrink-0">
+                    <div className="p-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] shrink-0">
                         {!apiKey && (
                             <p className="text-[10px] text-[#f85149] mb-2 px-1">
                                 Warning: VITE_GEMINI_API_KEY is not set. Chat will not work.
@@ -169,14 +169,14 @@ export function GeminiChatbot() {
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="Ask about your assignment..."
-                                className="flex-1 bg-[#1a1a2e] border border-[#2a2a4a] text-white text-[13px] rounded-xl px-3 py-2.5 resize-none h-10 max-h-32 focus:outline-none focus:border-[#4e9af1] transition-colors scrollbar-thin"
+                                className="flex-1 bg-[var(--bg-surface-alt)] border border-[var(--border-color)] text-[var(--text-strong)] text-[13px] rounded-xl px-3 py-2.5 resize-none h-10 max-h-32 focus:outline-none focus:border-[#4e9af1] transition-colors scrollbar-thin"
                                 rows={1}
                                 disabled={isTyping}
                             />
                             <button
                                 onClick={handleSend}
                                 disabled={!input.trim() || isTyping}
-                                className="w-10 h-10 bg-[#2f80ed] hover:bg-[#1a6cda] active:scale-95 text-white rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-50 disabled:active:scale-100"
+                                className="w-10 h-10 bg-[#2f80ed] hover:bg-[#1a6cda] active:scale-95 text-[var(--text-strong)] rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-50 disabled:active:scale-100"
                             >
                                 <SendIcon />
                             </button>
@@ -189,7 +189,7 @@ export function GeminiChatbot() {
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="w-14 h-14 bg-gradient-to-tr from-[#2f80ed] to-[#4e9af1] hover:shadow-[0_0_20px_rgba(78,154,241,0.4)] text-white rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 group"
+                    className="w-14 h-14 bg-gradient-to-tr from-[#2f80ed] to-[#4e9af1] hover:shadow-[0_0_20px_rgba(78,154,241,0.4)] text-[var(--text-strong)] rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 group"
                 >
                     <div className="group-hover:rotate-12 transition-transform duration-300">
                         <SparklesIcon />

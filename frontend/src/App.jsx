@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { ThemeProvider } from './context/ThemeContext.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -26,27 +27,29 @@ function AdminGuard({ children }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/" element={<RootRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/teacher" element={
-            <ProtectedRoute role="teacher"><TeacherDashboard /></ProtectedRoute>
-          } />
-          <Route path="/student" element={
-            <ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>
-          } />
-          {/* Admin routes — separate auth (adminToken in localStorage) */}
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={
-            <AdminGuard><AdminDashboard /></AdminGuard>
-          } />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/teacher" element={
+              <ProtectedRoute role="teacher"><TeacherDashboard /></ProtectedRoute>
+            } />
+            <Route path="/student" element={
+              <ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>
+            } />
+            {/* Admin routes — separate auth (adminToken in localStorage) */}
+            <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={
+              <AdminGuard><AdminDashboard /></AdminGuard>
+            } />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

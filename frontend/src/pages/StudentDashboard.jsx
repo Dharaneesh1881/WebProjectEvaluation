@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { GeminiChatbot } from '../components/GeminiChatbot.jsx';
 import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
-import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu } from 'react-icons/fi';
+import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu, FiSun, FiMoon } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
 function StudentLeaderboardView({ currentUser, onBack }) {
@@ -43,17 +44,17 @@ function StudentLeaderboardView({ currentUser, onBack }) {
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
         <div>
-          <h2 className="text-xl font-bold text-white">Leaderboard</h2>
-          <p className="text-xs text-[#555]">Top students per assignment</p>
+          <h2 className="text-xl font-bold text-[var(--text-strong)]">Leaderboard</h2>
+          <p className="text-xs text-[var(--text-faint)]">Top students per assignment</p>
         </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+          <div className="w-9 h-9 rounded-full border-[3px] border-[var(--border-color)] border-t-[#4e9af1] animate-spin" />
         </div>
       ) : data.length === 0 ? (
-        <p className="text-[#555] text-center py-20">No assignments available yet.</p>
+        <p className="text-[var(--text-faint)] text-center py-20">No assignments available yet.</p>
       ) : (
         <>
           {/* Assignment tabs */}
@@ -64,7 +65,7 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                 onClick={() => setActiveTab(i)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${activeTab === i
                   ? 'bg-[#2f80ed]/20 border-[#4e9af1] text-[#4e9af1] shadow-[0_0_12px_rgba(78,154,241,0.15)]'
-                  : 'bg-[#1a1a2e] border-[#2a2a4a] text-[#666] hover:border-[#444] hover:text-[#bbb]'
+                  : 'bg-[var(--bg-surface-alt)] border-[var(--border-color)] text-[var(--text-faint)] hover:border-[var(--text-faintest)] hover:text-[#bbb]'
                   }`}
               >
                 {a.title}
@@ -82,8 +83,8 @@ function StudentLeaderboardView({ currentUser, onBack }) {
             <>
               {/* No submissions at all */}
               {assignment.totalStudents === 0 ? (
-                <div className="text-center py-16 text-[#555]">
-                  <FiFlag size={36} className="mx-auto mb-3 text-[#444]" />
+                <div className="text-center py-16 text-[var(--text-faint)]">
+                  <FiFlag size={36} className="mx-auto mb-3 text-[var(--text-faintest)]" />
                   <p className="text-sm">No one has submitted yet. Be the first!</p>
                 </div>
               ) : (
@@ -99,7 +100,7 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                           <div className={`mb-1 p-2 rounded-full ${isMe ? 'ring-2 ring-[#4e9af1]' : ''}`}>
                             <FiAward size={28} style={{ color: cfg.color }} />
                           </div>
-                          <p className={`text-xs font-bold text-center leading-tight ${isMe ? 'text-[#4e9af1]' : 'text-white'
+                          <p className={`text-xs font-bold text-center leading-tight ${isMe ? 'text-[#4e9af1]' : 'text-[var(--text-strong)]'
                             }`}>
                             {s.name}{isMe ? ' (You)' : ''}
                           </p>
@@ -119,13 +120,13 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                   </div>
 
                   {/* Podium base line */}
-                  <div className="h-1 bg-gradient-to-r from-transparent via-[#2a2a4a] to-transparent rounded-full mb-8" />
+                  <div className="h-1 bg-gradient-to-r from-transparent via-[var(--border-color)] to-transparent rounded-full mb-8" />
 
                   {/* ── YOUR RANK ─────────────────── */}
                   {assignment.myRank ? (
                     <div className={`rounded-2xl border p-5 flex items-center gap-5 ${assignment.myRank.completed
                       ? 'bg-[#3fb950]/5 border-[#3fb950]/30'
-                      : 'bg-[#1a1a2e] border-[#2a2a4a]'
+                      : 'bg-[var(--bg-surface-alt)] border-[var(--border-color)]'
                       }`}>
                       <div className="p-3 rounded-xl" style={{ background: `${podiumConfig[assignment.myRank.rank]?.color ?? '#4e9af1'}18` }}>
                         {assignment.myRank.rank <= 3
@@ -133,12 +134,12 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                           : <FiTarget size={32} className="text-[#4e9af1]" />}
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs text-[#555] mb-0.5">Your rank</p>
-                        <p className="text-3xl font-black text-white">#{assignment.myRank.rank}</p>
-                        <p className="text-xs text-[#555] mt-0.5">out of {assignment.totalStudents} student{assignment.totalStudents !== 1 ? 's' : ''}</p>
+                        <p className="text-xs text-[var(--text-faint)] mb-0.5">Your rank</p>
+                        <p className="text-3xl font-black text-[var(--text-strong)]">#{assignment.myRank.rank}</p>
+                        <p className="text-xs text-[var(--text-faint)] mt-0.5">out of {assignment.totalStudents} student{assignment.totalStudents !== 1 ? 's' : ''}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-[#555] mb-0.5">Best score</p>
+                        <p className="text-xs text-[var(--text-faint)] mb-0.5">Best score</p>
                         <p className={`text-2xl font-bold ${scoreColor(assignment.myRank.bestScore)}`}>{assignment.myRank.bestScore}/100</p>
                         {assignment.myRank.completed && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/30 text-[#3fb950] rounded-full">
@@ -148,7 +149,7 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                       </div>
                       {/* Score progress bar */}
                       <div className="w-24">
-                        <div className="w-full bg-[#0d0d1a] rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-[var(--bg-surface)] rounded-full h-2 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${assignment.myRank.bestScore >= 80 ? 'bg-[#3fb950]' :
                               assignment.myRank.bestScore >= 50 ? 'bg-[#f0a500]' : 'bg-[#f85149]'
@@ -156,14 +157,14 @@ function StudentLeaderboardView({ currentUser, onBack }) {
                             style={{ width: `${assignment.myRank.bestScore}%` }}
                           />
                         </div>
-                        <p className="text-[9px] text-[#555] mt-1 text-center">{assignment.myRank.bestScore}% score</p>
+                        <p className="text-[9px] text-[var(--text-faint)] mt-1 text-center">{assignment.myRank.bestScore}% score</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-[#2a2a4a] p-8 text-center">
-                      <FiZap size={36} className="mx-auto mb-2 text-[#444]" />
-                      <p className="text-sm font-semibold text-white mb-1">You haven&apos;t submitted yet</p>
-                      <p className="text-xs text-[#555]">Submit your code to appear on the leaderboard!</p>
+                    <div className="rounded-2xl border border-dashed border-[var(--border-color)] p-8 text-center">
+                      <FiZap size={36} className="mx-auto mb-2 text-[var(--text-faintest)]" />
+                      <p className="text-sm font-semibold text-[var(--text-strong)] mb-1">You haven&apos;t submitted yet</p>
+                      <p className="text-xs text-[var(--text-faint)]">Submit your code to appear on the leaderboard!</p>
                     </div>
                   )}
                 </>
@@ -182,10 +183,10 @@ function AssignmentCard({ a, progress, onStart }) {
   const hasTried = p?.attempts > 0;
 
   return (
-    <div className={`bg-[#1a1a2e] border rounded-xl overflow-hidden flex flex-col transition-colors ${isCompleted ? 'border-[#3fb950]/40' : 'border-[#2a2a4a]'}`}>
+    <div className={`bg-[var(--bg-surface-alt)] border rounded-xl overflow-hidden flex flex-col transition-colors ${isCompleted ? 'border-[#3fb950]/40' : 'border-[var(--border-color)]'}`}>
       {a.referenceScreenshotUrl && (
         <div className="relative">
-          <img src={a.referenceScreenshotUrl} alt={a.title} className="w-full h-36 object-cover object-top border-b border-[#2a2a4a]" />
+          <img src={a.referenceScreenshotUrl} alt={a.title} className="w-full h-36 object-cover object-top border-b border-[var(--border-color)]" />
           {isCompleted ? (
             <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-[#3fb950]/20 border border-[#3fb950]/50 text-[#3fb950] text-[10px] font-bold rounded-full backdrop-blur-sm">
               <MdCheckCircle size={12} /> Completed
@@ -199,7 +200,7 @@ function AssignmentCard({ a, progress, onStart }) {
       )}
       <div className="p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <h3 className="font-semibold text-white text-sm leading-snug">{a.title}</h3>
+          <h3 className="font-semibold text-[var(--text-strong)] text-sm leading-snug">{a.title}</h3>
           {!a.referenceScreenshotUrl && isCompleted && (
             <span className="inline-flex items-center gap-1 shrink-0 text-[10px] font-bold px-2 py-0.5 bg-[#3fb950]/10 border border-[#3fb950]/40 text-[#3fb950] rounded-full">
               <MdCheckCircle size={10} /> Completed
@@ -210,14 +211,14 @@ function AssignmentCard({ a, progress, onStart }) {
           )}
         </div>
         {hasTried && (
-          <p className="text-[10px] text-[#555] mb-3">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''} · Best: <span className={isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}>{p.bestScore}/100</span></p>
+          <p className="text-[10px] text-[var(--text-faint)] mb-3">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''} · Best: <span className={isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}>{p.bestScore}/100</span></p>
         )}
         <button
           type="button"
           onClick={() => onStart(a)}
           className={`mt-auto w-full py-2 text-xs font-semibold rounded-lg transition-colors ${isCompleted
             ? 'bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/40 hover:bg-[#3fb950]/30'
-            : 'bg-[#2f80ed] text-white hover:bg-[#1a6cda]'
+            : 'bg-[#2f80ed] text-[var(--text-strong)] hover:bg-[#1a6cda]'
             }`}
         >
           {isCompleted ? 'Resubmit' : hasTried ? 'Try Again' : 'Start Assignment'}
@@ -229,6 +230,7 @@ function AssignmentCard({ a, progress, onStart }) {
 
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [view, setView] = useState('list'); // 'list' | 'editor' | 'leaderboard'
   const [assignments, setAssignments] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -346,22 +348,22 @@ export default function StudentDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-[#e0e0e0] flex">
+    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-main)] flex">
 
       {/* ── LEFT SIDEBAR ── */}
       <aside
-        className="shrink-0 bg-[#0d0d1a] border-r border-[#2a2a4a] flex flex-col min-h-screen sticky top-0 h-screen overflow-hidden transition-all duration-300"
+        className="shrink-0 bg-[var(--bg-surface)] border-r border-[var(--border-color)] flex flex-col min-h-screen sticky top-0 h-screen overflow-hidden transition-all duration-300"
         style={{ width: sidebarOpen ? '224px' : '48px' }}
       >
         {/* Brand */}
-        <div className="px-3 py-4 border-b border-[#2a2a4a] shrink-0">
+        <div className="px-3 py-4 border-b border-[var(--border-color)] shrink-0">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-[#2f80ed]/30 to-[#4e9af1]/10 border border-[#2f80ed]/30 flex items-center justify-center">
               <FiCode size={14} className="text-[#4e9af1]" />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
-              <p className="text-white text-sm font-bold leading-tight whitespace-nowrap">Student</p>
-              <p className="text-[#444] text-[10px] truncate max-w-[100px]">{user?.name}</p>
+              <p className="text-[var(--text-strong)] text-sm font-bold leading-tight whitespace-nowrap">Student</p>
+              <p className="text-[var(--text-faintest)] text-[10px] truncate max-w-[100px]">{user?.name}</p>
             </div>
           </div>
         </div>
@@ -378,7 +380,7 @@ export default function StudentDashboard() {
               title={!sidebarOpen ? item.label : undefined}
               className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeView === item.id
                 ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
-                : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
+                : 'text-[var(--text-faint)] hover:text-[#bbb] hover:bg-[var(--bg-surface-alt)]'
                 }`}
             >
               <item.icon size={16} className="shrink-0" />
@@ -392,14 +394,14 @@ export default function StudentDashboard() {
           {/* Shown when inside a specific assignment */}
           {selectedAssignment && sidebarOpen && (
             <>
-              <div className="border-t border-[#2a2a4a] my-2" />
+              <div className="border-t border-[var(--border-color)] my-2" />
               <div className="px-3 py-2">
-                <p className="text-[10px] text-[#444] font-semibold uppercase tracking-wider mb-1.5">Current</p>
-                <p className="text-xs text-[#888] font-medium leading-snug line-clamp-2">{selectedAssignment.title}</p>
+                <p className="text-[10px] text-[var(--text-faintest)] font-semibold uppercase tracking-wider mb-1.5">Current</p>
+                <p className="text-xs text-[var(--text-muted)] font-medium leading-snug line-clamp-2">{selectedAssignment.title}</p>
               </div>
               <button
                 onClick={() => setSelectedAssignment(null)}
-                className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
+                className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[var(--text-faint)] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
               >
                 <FiArrowLeft size={16} className="shrink-0" />
                 <span className="overflow-hidden whitespace-nowrap">All Assignments</span>
@@ -410,7 +412,7 @@ export default function StudentDashboard() {
             <button
               onClick={() => setSelectedAssignment(null)}
               title="All Assignments"
-              className="w-full flex items-center justify-center px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
+              className="w-full flex items-center justify-center px-2.5 py-2.5 rounded-xl text-sm text-[var(--text-faint)] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-all"
             >
               <FiArrowLeft size={16} />
             </button>
@@ -422,7 +424,7 @@ export default function StudentDashboard() {
           <button
             onClick={logout}
             title={!sidebarOpen ? 'Sign Out' : undefined}
-            className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[#666] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
+            className="w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm text-[var(--text-faint)] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-all"
           >
             <FiLogOut size={16} className="shrink-0" />
             <span className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${sidebarOpen ? 'opacity-100 max-w-[160px]' : 'opacity-0 max-w-0'}`}>
@@ -436,20 +438,29 @@ export default function StudentDashboard() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top bar */}
-        <header className="bg-[#0d0d1a] border-b border-[#2a2a4a] px-4 py-3 sticky top-0 z-10 flex items-center gap-3">
-          {/* Sidebar toggle */}
+        <header className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-4 py-3 sticky top-0 z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Sidebar toggle */}
+            <button
+              onClick={() => setSidebarOpen(o => !o)}
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-faint)] hover:text-[#bbb] hover:bg-[var(--bg-surface-alt)] transition-all shrink-0"
+              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? <FiChevronLeft size={16} /> : <FiMenu size={16} />}
+            </button>
+            <h1 className="font-bold text-[var(--text-strong)] text-sm">
+              {selectedAssignment ? selectedAssignment.title
+                : view === 'leaderboard' ? 'Leaderboard'
+                  : 'Available Assignments'}
+            </h1>
+          </div>
           <button
-            onClick={() => setSidebarOpen(o => !o)}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-[#555] hover:text-[#bbb] hover:bg-[#1a1a2e] transition-all shrink-0"
-            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-lg bg-[var(--bg-base)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-strong)] flex items-center justify-center transition-colors shrink-0"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           >
-            {sidebarOpen ? <FiChevronLeft size={16} /> : <FiMenu size={16} />}
+            {theme === 'dark' ? <FiSun size={14} /> : <FiMoon size={14} />}
           </button>
-          <h1 className="font-bold text-white text-sm">
-            {selectedAssignment ? selectedAssignment.title
-              : view === 'leaderboard' ? 'Leaderboard'
-                : 'Available Assignments'}
-          </h1>
         </header>
 
 
@@ -463,13 +474,13 @@ export default function StudentDashboard() {
         {/* ─ Assignment list ─ */}
         {!selectedAssignment && view === 'list' && (
           <main className="flex-1 overflow-y-auto px-8 py-8">
-            <p className="text-sm text-[#666] mb-6">Pick an assignment and submit your code for evaluation.</p>
+            <p className="text-sm text-[var(--text-faint)] mb-6">Pick an assignment and submit your code for evaluation.</p>
             {loadingList ? (
               <div className="flex justify-center py-20">
-                <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                <div className="w-9 h-9 rounded-full border-[3px] border-[var(--border-color)] border-t-[#4e9af1] animate-spin" />
               </div>
             ) : assignments.length === 0 ? (
-              <p className="text-[#555] text-center py-20">No assignments available yet.</p>
+              <p className="text-[var(--text-faint)] text-center py-20">No assignments available yet.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {assignments.map(a => (
@@ -491,11 +502,11 @@ export default function StudentDashboard() {
               {(() => {
                 return (
                   <aside
-                    className="shrink-0 flex flex-col overflow-hidden border-r border-[#2a2a4a]"
+                    className="shrink-0 flex flex-col overflow-hidden border-r border-[var(--border-color)]"
                     style={{ width: '380px', background: '#0f0f1a' }}
                   >
                     {/* ── Tab Bar ── */}
-                    <div className="shrink-0 flex items-center gap-1 px-2 border-b border-[#2a2a4a]" style={{ background: '#0d0d1f' }}>
+                    <div className="shrink-0 flex items-center gap-1 px-2 border-b border-[var(--border-color)]" style={{ background: '#0d0d1f' }}>
                       {[
                         { key: 'description', label: 'Description' },
                         { key: 'progress', label: p?.attempts > 0 ? `Progress (${p.attempts})` : 'Progress' },
@@ -505,8 +516,8 @@ export default function StudentDashboard() {
                           type="button"
                           onClick={() => setInfoTab(tab.key)}
                           className={`px-3 py-2.5 text-[13px] font-medium transition-colors border-b-2 -mb-px ${infoTab === tab.key
-                            ? 'border-[#4e9af1] text-white'
-                            : 'border-transparent text-[#555] hover:text-[#888]'
+                            ? 'border-[#4e9af1] text-[var(--text-strong)]'
+                            : 'border-transparent text-[var(--text-faint)] hover:text-[var(--text-muted)]'
                             }`}
                         >
                           {tab.label}
@@ -520,7 +531,7 @@ export default function StudentDashboard() {
                         <div className="px-6 pt-5 pb-8">
 
                           {/* Title — large like LeetCode */}
-                          <h2 className="text-xl font-bold text-white mb-4 leading-tight">
+                          <h2 className="text-xl font-bold text-[var(--text-strong)] mb-4 leading-tight">
                             {selectedAssignment.title}
                           </h2>
 
@@ -540,7 +551,7 @@ export default function StudentDashboard() {
                             return (
                               <div className="mb-5">
                                 {/* Main preview */}
-                                <div className="relative rounded-lg border border-[#2a2a4a] overflow-hidden group bg-black"
+                                <div className="relative rounded-lg border border-[var(--border-color)] overflow-hidden group bg-black"
                                   style={{ height: '170px' }}>
                                   <img
                                     src={shots[activeShot]}
@@ -549,7 +560,7 @@ export default function StudentDashboard() {
                                     onClick={() => setLightbox(shots[activeShot])}
                                   />
                                   {/* State badge */}
-                                  <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/60 px-2 py-0.5 rounded-full">
+                                  <span className="absolute top-2 left-2 text-[10px] font-bold text-[var(--text-strong)] bg-black/60 px-2 py-0.5 rounded-full">
                                     {stateLabels[activeShot] ?? `State ${activeShot + 1}`}
                                   </span>
                                   {/* Open full size */}
@@ -557,7 +568,7 @@ export default function StudentDashboard() {
                                     href={shots[activeShot]}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="absolute top-2 right-2 text-[10px] font-semibold text-white bg-black/60 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                                    className="absolute top-2 right-2 text-[10px] font-semibold text-[var(--text-strong)] bg-black/60 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
                                   >
                                     ↗ Full size
                                   </a>
@@ -567,12 +578,12 @@ export default function StudentDashboard() {
                                       <button
                                         type="button"
                                         onClick={() => setActiveShot(i => (i - 1 + shots.length) % shots.length)}
-                                        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
+                                        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-[var(--text-strong)] flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
                                       >‹</button>
                                       <button
                                         type="button"
                                         onClick={() => setActiveShot(i => (i + 1) % shots.length)}
-                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-[var(--text-strong)] flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
                                       >›</button>
                                     </>
                                   )}
@@ -588,12 +599,12 @@ export default function StudentDashboard() {
                                         onClick={() => setActiveShot(i)}
                                         className={`shrink-0 relative overflow-hidden rounded border transition-all ${activeShot === i
                                           ? 'border-[#4e9af1] ring-1 ring-[#4e9af1]/40'
-                                          : 'border-[#2a2a4a] opacity-60 hover:opacity-90'
+                                          : 'border-[var(--border-color)] opacity-60 hover:opacity-90'
                                           }`}
                                         style={{ width: '60px', height: '40px' }}
                                       >
                                         <img src={url} alt={`State ${i + 1}`} className="w-full h-full object-cover object-top" />
-                                        <span className="absolute bottom-0 left-0 right-0 text-center text-[8px] font-bold text-white bg-black/60 leading-tight py-0.5">
+                                        <span className="absolute bottom-0 left-0 right-0 text-center text-[8px] font-bold text-[var(--text-strong)] bg-black/60 leading-tight py-0.5">
                                           {stateLabels[i] ?? `${i + 1}`}
                                         </span>
                                       </button>
@@ -601,7 +612,7 @@ export default function StudentDashboard() {
                                   </div>
                                 )}
 
-                                <p className="text-[10px] text-[#444] mt-1.5">
+                                <p className="text-[10px] text-[var(--text-faintest)] mt-1.5">
                                   Reference design · {shots.length} screenshot{shots.length !== 1 ? 's' : ''}
                                 </p>
 
@@ -620,7 +631,7 @@ export default function StudentDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => setLightbox(null)}
-                                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 text-sm"
+                                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[var(--text-strong)]/10 text-[var(--text-strong)] flex items-center justify-center hover:bg-white/20 text-sm"
                                     >✕</button>
                                   </div>
                                 )}
@@ -638,7 +649,7 @@ export default function StudentDashboard() {
                               {selectedAssignment.description}
                             </div>
                           ) : (
-                            <p className="text-sm text-[#444] italic">No description provided.</p>
+                            <p className="text-sm text-[var(--text-faintest)] italic">No description provided.</p>
                           )}
                         </div>
                       </div>
@@ -651,10 +662,10 @@ export default function StudentDashboard() {
                           <div className="flex flex-col gap-6">
                             {/* Score hero */}
                             <div className="text-center py-4">
-                              <p className="text-[11px] text-[#555] uppercase tracking-wider mb-1">Best Score</p>
+                              <p className="text-[11px] text-[var(--text-faint)] uppercase tracking-wider mb-1">Best Score</p>
                               <p className={`text-4xl font-black ${isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}`}>
                                 {p.bestScore}
-                                <span className="text-xl text-[#444] font-normal">/100</span>
+                                <span className="text-xl text-[var(--text-faintest)] font-normal">/100</span>
                               </p>
                               <p className={`text-xs font-semibold mt-1 ${isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]'}`}>
                                 {isCompleted ? '✓ Completed' : 'In Progress'}
@@ -663,7 +674,7 @@ export default function StudentDashboard() {
 
                             {/* Progress bar */}
                             <div>
-                              <div className="w-full bg-[#1a1a2e] rounded-full h-2 overflow-hidden">
+                              <div className="w-full bg-[var(--bg-surface-alt)] rounded-full h-2 overflow-hidden">
                                 <div
                                   className="h-full rounded-full transition-all duration-700"
                                   style={{ width: `${p.bestScore}%`, background: isCompleted ? '#3fb950' : '#f0a500' }}
@@ -678,22 +689,22 @@ export default function StudentDashboard() {
                                 { label: 'Best Score', value: `${p.bestScore}/100` },
                                 { label: 'Status', value: isCompleted ? 'Completed' : 'In Progress' },
                               ].map(row => (
-                                <div key={row.label} className="flex justify-between items-center border-b border-[#1a1a2e] pb-3">
-                                  <span className="text-sm text-[#555]">{row.label}</span>
-                                  <span className={`text-sm font-semibold ${row.label === 'Status' ? (isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]') : 'text-white'}`}>
+                                <div key={row.label} className="flex justify-between items-center border-b border-[var(--bg-surface-alt)] pb-3">
+                                  <span className="text-sm text-[var(--text-faint)]">{row.label}</span>
+                                  <span className={`text-sm font-semibold ${row.label === 'Status' ? (isCompleted ? 'text-[#3fb950]' : 'text-[#f0a500]') : 'text-[var(--text-strong)]'}`}>
                                     {row.value}
                                   </span>
                                 </div>
                               ))}
                             </div>
 
-                            <p className="text-xs text-[#444] leading-relaxed">
+                            <p className="text-xs text-[var(--text-faintest)] leading-relaxed">
                               Resubmit anytime — only your best score is saved.
                             </p>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
-                            <p className="text-[#555] text-sm font-medium">No submissions yet</p>
+                            <p className="text-[var(--text-faint)] text-sm font-medium">No submissions yet</p>
                             <p className="text-[#333] text-xs">Write your solution and hit Submit.</p>
                           </div>
                         )}
@@ -722,9 +733,9 @@ export default function StudentDashboard() {
 
                 {/* Loading code spinner */}
                 {loadingCode ? (
-                  <div className="flex-1 flex items-center justify-center bg-[#0d0d1a]">
-                    <div className="flex flex-col items-center gap-3 text-[#555]">
-                      <div className="w-6 h-6 rounded-full border-2 border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+                  <div className="flex-1 flex items-center justify-center bg-[var(--bg-surface)]">
+                    <div className="flex flex-col items-center gap-3 text-[var(--text-faint)]">
+                      <div className="w-6 h-6 rounded-full border-2 border-[var(--border-color)] border-t-[#4e9af1] animate-spin" />
                       <p className="text-xs">Loading your best submission…</p>
                     </div>
                   </div>
@@ -733,11 +744,11 @@ export default function StudentDashboard() {
                 )}
 
                 {/* Submit bar */}
-                <div className="shrink-0 px-4 py-3 bg-[#0a0a16] border-t border-[#2a2a4a] flex items-center gap-4">
+                <div className="shrink-0 px-4 py-3 bg-[#0a0a16] border-t border-[var(--border-color)] flex items-center gap-4">
                   <button
                     onClick={handleSubmit}
                     disabled={isEvaluating || loadingCode}
-                    className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-all bg-[#2f80ed] text-white hover:bg-[#1a6cda] shadow-[0_0_20px_rgba(47,128,237,0.25)] disabled:bg-[#2a2a4a] disabled:text-[#555] disabled:cursor-not-allowed disabled:shadow-none"
+                    className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-all bg-[#2f80ed] text-[var(--text-strong)] hover:bg-[#1a6cda] shadow-[0_0_20px_rgba(47,128,237,0.25)] disabled:bg-[var(--border-color)] disabled:text-[var(--text-faint)] disabled:cursor-not-allowed disabled:shadow-none"
                   >
                     {isEvaluating ? (
                       <span className="flex items-center gap-2">
@@ -748,7 +759,7 @@ export default function StudentDashboard() {
                   </button>
                   {submitError && <p className="text-xs text-[#f85149]">{submitError}</p>}
                   {status === 'pending' || status === 'processing' ? (
-                    <p className="text-xs text-[#888] ml-auto">Running tests… please wait</p>
+                    <p className="text-xs text-[var(--text-muted)] ml-auto">Running tests… please wait</p>
                   ) : status === 'done' && result ? (
                     <button
                       onClick={() => setShowResults(true)}
@@ -769,20 +780,20 @@ export default function StudentDashboard() {
                       onClick={() => setShowResults(false)}
                     />
                     {/* Results panel slides in from right */}
-                    <div className="w-[55%] max-w-xl bg-[#0d0d1a] border-l border-[#2a2a4a] flex flex-col overflow-hidden pointer-events-auto shadow-2xl"
+                    <div className="w-[55%] max-w-xl bg-[var(--bg-surface)] border-l border-[var(--border-color)] flex flex-col overflow-hidden pointer-events-auto shadow-2xl"
                       style={{ animation: 'slideInRight 0.25s ease-out' }}>
                       {/* Panel header */}
-                      <div className="flex items-center justify-between px-5 py-3 bg-[#1a1a2e] border-b border-[#2a2a4a] shrink-0">
+                      <div className="flex items-center justify-between px-5 py-3 bg-[var(--bg-surface-alt)] border-b border-[var(--border-color)] shrink-0">
                         <div className="flex items-center gap-2">
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-[#4e9af1]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-                          <span className="text-sm font-bold text-white">Evaluation Results</span>
+                          <span className="text-sm font-bold text-[var(--text-strong)]">Evaluation Results</span>
                           <span className={`ml-1 text-xs font-black px-2 py-0.5 rounded-full ${result.totalScore >= 50 ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#f85149]/20 text-[#f85149]'}`}>
                             {result.totalScore}/100
                           </span>
                         </div>
                         <button
                           onClick={() => setShowResults(false)}
-                          className="w-7 h-7 rounded-lg bg-[#2a2a4a] hover:bg-[#3a3a5a] text-[#888] hover:text-white flex items-center justify-center text-xs transition-colors"
+                          className="w-7 h-7 rounded-lg bg-[var(--border-color)] hover:bg-[var(--border-light)] text-[var(--text-muted)] hover:text-[var(--text-strong)] flex items-center justify-center text-xs transition-colors"
                         >
                           ✕
                         </button>

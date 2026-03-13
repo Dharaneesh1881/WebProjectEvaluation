@@ -27,40 +27,40 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-white text-center mb-1">Welcome back</h1>
-        <p className="text-sm text-[#666] text-center mb-8">Sign in to your account</p>
+        <h1 className="text-2xl font-bold text-[var(--text-strong)] text-center mb-1">Welcome back</h1>
+        <p className="text-sm text-[var(--text-faint)] text-center mb-8">Sign in to your account</p>
 
-        <form onSubmit={handleSubmit} className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-[var(--bg-surface-alt)] border border-[var(--border-color)] rounded-xl p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#888] mb-1.5">Email</label>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Email</label>
             <input
               type="email"
               required
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white
-                         placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
+              className="w-full px-3 py-2.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)]
+                         placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1]"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#888] mb-1.5">Password</label>
+            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white
-                           placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1] pr-10"
+                className="w-full px-3 py-2.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)]
+                           placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1] pr-10"
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] hover:text-[#ccc] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-muted)] transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -77,14 +77,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-[#2f80ed] text-white text-sm font-semibold rounded-lg
+            className="w-full py-2.5 bg-[#2f80ed] text-[var(--text-strong)] text-sm font-semibold rounded-lg
                        hover:bg-[#1a6cda] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
-        <p className="text-sm text-[#666] text-center mt-4">
+        <p className="text-sm text-[var(--text-faint)] text-center mt-4">
           Don't have an account?{' '}
           <Link to="/register" className="text-[#4e9af1] hover:underline">Register</Link>
         </p>

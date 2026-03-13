@@ -20,15 +20,15 @@ const SCORE_COLORS = [RED, AMBER, '#e8c84a', BLUE, GREEN];
 // ── Tiny KPI card ─────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color = BLUE, icon: Icon }) {
     return (
-        <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-[var(--bg-surface-alt)] border border-[var(--border-color)] rounded-xl p-4 flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                 style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
                 <Icon size={18} style={{ color }} />
             </div>
             <div className="min-w-0">
-                <p className="text-[10px] text-[#555] uppercase tracking-wider font-semibold truncate">{label}</p>
-                <p className="text-2xl font-black text-white leading-tight">{value}</p>
-                {sub && <p className="text-[10px] text-[#444] truncate">{sub}</p>}
+                <p className="text-[10px] text-[var(--text-faint)] uppercase tracking-wider font-semibold truncate">{label}</p>
+                <p className="text-2xl font-black text-[var(--text-strong)] leading-tight">{value}</p>
+                {sub && <p className="text-[10px] text-[var(--text-faintest)] truncate">{sub}</p>}
             </div>
         </div>
     );
@@ -38,11 +38,11 @@ function KpiCard({ label, value, sub, color = BLUE, icon: Icon }) {
 function ChartTooltip({ active, payload, label }) {
     if (!active || !payload?.length) return null;
     return (
-        <div className="bg-[#13132a] border border-[#2a2a4a] rounded-lg px-3 py-2 text-xs shadow-xl">
-            {label !== undefined && <p className="text-[#888] mb-1 font-medium">{label}</p>}
+        <div className="bg-[var(--bg-surface-alt)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs shadow-xl">
+            {label !== undefined && <p className="text-[var(--text-muted)] mb-1 font-medium">{label}</p>}
             {payload.map((p, i) => (
                 <p key={i} style={{ color: p.color || p.fill || BLUE }}>
-                    {p.name}: <span className="font-bold text-white">{p.value}</span>
+                    {p.name}: <span className="font-bold text-[var(--text-strong)]">{p.value}</span>
                 </p>
             ))}
         </div>
@@ -52,9 +52,9 @@ function ChartTooltip({ active, payload, label }) {
 // ── Section wrapper ────────────────────────────────────────────────────────────
 function ChartCard({ title, subtitle, children, className = '' }) {
     return (
-        <div className={`bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-5 ${className}`}>
-            <p className="text-sm font-bold text-white mb-0.5">{title}</p>
-            {subtitle && <p className="text-[11px] text-[#555] mb-4">{subtitle}</p>}
+        <div className={`bg-[var(--bg-surface-alt)] border border-[var(--border-color)] rounded-xl p-5 ${className}`}>
+            <p className="text-sm font-bold text-[var(--text-strong)] mb-0.5">{title}</p>
+            {subtitle && <p className="text-[11px] text-[var(--text-faint)] mb-4">{subtitle}</p>}
             {!subtitle && <div className="mb-4" />}
             {children}
         </div>
@@ -138,12 +138,12 @@ export function AnalyticsView({ onBack }) {
 
     if (loading) return (
         <div className="flex items-center justify-center h-64">
-            <div className="w-9 h-9 rounded-full border-[3px] border-[#2a2a4a] border-t-[#4e9af1] animate-spin" />
+            <div className="w-9 h-9 rounded-full border-[3px] border-[var(--border-color)] border-t-[#4e9af1] animate-spin" />
         </div>
     );
 
     if (data.length === 0) return (
-        <div className="text-center py-20 text-[#555]">
+        <div className="text-center py-20 text-[var(--text-faint)]">
             <FiBarChart2 size={40} className="mx-auto mb-4 opacity-30" />
             <p className="text-sm">No data yet. Students need to submit first.</p>
         </div>
@@ -154,9 +154,9 @@ export function AnalyticsView({ onBack }) {
             {/* Header */}
             <div className="flex items-center gap-3">
                 <button type="button" onClick={onBack} className="text-[#4e9af1] text-sm hover:underline">← Back</button>
-                <h2 className="text-xl font-bold text-white flex-1">Class Analytics</h2>
+                <h2 className="text-xl font-bold text-[var(--text-strong)] flex-1">Class Analytics</h2>
                 <button type="button" onClick={fetch}
-                    className="flex items-center gap-1.5 text-xs text-[#555] hover:text-[#888] border border-[#2a2a4a] rounded-lg px-3 py-1.5 transition-colors">
+                    className="flex items-center gap-1.5 text-xs text-[var(--text-faint)] hover:text-[var(--text-muted)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 transition-colors">
                     <FiRefreshCw size={12} /> Refresh
                 </button>
             </div>
@@ -171,13 +171,13 @@ export function AnalyticsView({ onBack }) {
 
             {/* Assignment tabs */}
             <div>
-                <p className="text-[10px] text-[#555] uppercase tracking-wider font-semibold mb-2">Select Assignment</p>
+                <p className="text-[10px] text-[var(--text-faint)] uppercase tracking-wider font-semibold mb-2">Select Assignment</p>
                 <div className="flex gap-2 flex-wrap">
                     {data.map((a, i) => (
                         <button key={a.assignmentId} type="button" onClick={() => setActiveIdx(i)}
                             className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${activeIdx === i
                                     ? 'bg-[#2f80ed]/20 border-[#4e9af1] text-[#4e9af1]'
-                                    : 'bg-[#1a1a2e] border-[#2a2a4a] text-[#666] hover:border-[#444] hover:text-[#bbb]'
+                                    : 'bg-[var(--bg-surface-alt)] border-[var(--border-color)] text-[var(--text-faint)] hover:border-[var(--text-faintest)] hover:text-[#bbb]'
                                 }`}>
                             {a.title}
                         </button>
@@ -207,7 +207,7 @@ export function AnalyticsView({ onBack }) {
 
                 <ChartCard title="Completion Status" subtitle={`${assignment?.title}`}>
                     {donutData.length === 0 ? (
-                        <div className="flex items-center justify-center h-[220px] text-[#444] text-sm">No submissions yet</div>
+                        <div className="flex items-center justify-center h-[220px] text-[var(--text-faintest)] text-sm">No submissions yet</div>
                     ) : (
                         <>
                             <ResponsiveContainer width="100%" height={180}>
@@ -223,8 +223,8 @@ export function AnalyticsView({ onBack }) {
                                 {donutData.map(d => (
                                     <div key={d.name} className="flex items-center gap-2 text-xs">
                                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
-                                        <span className="text-[#888]">{d.name}</span>
-                                        <span className="ml-auto font-bold text-white">{d.value}</span>
+                                        <span className="text-[var(--text-muted)]">{d.name}</span>
+                                        <span className="ml-auto font-bold text-[var(--text-strong)]">{d.value}</span>
                                     </div>
                                 ))}
                             </div>
@@ -249,7 +249,7 @@ export function AnalyticsView({ onBack }) {
 
                 <ChartCard title="Attempts vs Score" subtitle="Do more attempts lead to higher scores?">
                     {scatterData.length === 0 ? (
-                        <div className="flex items-center justify-center h-[220px] text-[#444] text-sm">No data</div>
+                        <div className="flex items-center justify-center h-[220px] text-[var(--text-faintest)] text-sm">No data</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={220}>
                             <ScatterChart>
@@ -266,10 +266,10 @@ export function AnalyticsView({ onBack }) {
                                         if (!active || !payload?.length) return null;
                                         const d = payload[0].payload;
                                         return (
-                                            <div className="bg-[#13132a] border border-[#2a2a4a] rounded-lg px-3 py-2 text-xs shadow-xl">
-                                                <p className="text-white font-bold mb-1">{d.name}</p>
-                                                <p className="text-[#888]">Attempts: <span className="text-white">{d.attempts}</span></p>
-                                                <p className="text-[#888]">Score: <span className="text-white">{d.score}/100</span></p>
+                                            <div className="bg-[var(--bg-surface-alt)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs shadow-xl">
+                                                <p className="text-[var(--text-strong)] font-bold mb-1">{d.name}</p>
+                                                <p className="text-[var(--text-muted)]">Attempts: <span className="text-[var(--text-strong)]">{d.attempts}</span></p>
+                                                <p className="text-[var(--text-muted)]">Score: <span className="text-[var(--text-strong)]">{d.score}/100</span></p>
                                             </div>
                                         );
                                     }}
@@ -284,7 +284,7 @@ export function AnalyticsView({ onBack }) {
             {/* Row 3: Top performers horizontal bar */}
             <ChartCard title="Top Performers" subtitle={`Highest scoring students in "${assignment?.title}"`}>
                 {topStudents.length === 0 ? (
-                    <p className="text-[#444] text-sm text-center py-8">No submissions yet</p>
+                    <p className="text-[var(--text-faintest)] text-sm text-center py-8">No submissions yet</p>
                 ) : (
                     <div className="space-y-2">
                         {topStudents.map((s, i) => (
@@ -294,8 +294,8 @@ export function AnalyticsView({ onBack }) {
                                 }}>
                                     #{i + 1}
                                 </span>
-                                <span className="text-xs text-[#888] w-20 truncate shrink-0">{s.name}</span>
-                                <div className="flex-1 bg-[#0d0d1a] rounded-full h-2 overflow-hidden">
+                                <span className="text-xs text-[var(--text-muted)] w-20 truncate shrink-0">{s.name}</span>
+                                <div className="flex-1 bg-[var(--bg-surface)] rounded-full h-2 overflow-hidden">
                                     <div
                                         className="h-full rounded-full transition-all duration-500"
                                         style={{
@@ -304,7 +304,7 @@ export function AnalyticsView({ onBack }) {
                                         }}
                                     />
                                 </div>
-                                <span className={`text-xs font-bold w-10 text-right shrink-0 ${s.completed ? 'text-[#3fb950]' : 'text-white'}`}>
+                                <span className={`text-xs font-bold w-10 text-right shrink-0 ${s.completed ? 'text-[#3fb950]' : 'text-[var(--text-strong)]'}`}>
                                     {s.score}
                                 </span>
                                 {s.completed && (
@@ -338,36 +338,36 @@ export function AnalyticsView({ onBack }) {
             <ChartCard title={`All Students — ${assignment?.title}`}
                 subtitle="Complete breakdown with scores, attempts, and status">
                 {(assignment?.students || []).length === 0 ? (
-                    <p className="text-[#444] text-sm text-center py-8">No submissions yet</p>
+                    <p className="text-[var(--text-faintest)] text-sm text-center py-8">No submissions yet</p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                             <thead>
-                                <tr className="border-b border-[#2a2a4a]">
+                                <tr className="border-b border-[var(--border-color)]">
                                     {['Rank', 'Student', 'Best Score', 'Attempts', 'Status', 'Progress'].map(h => (
-                                        <th key={h} className="text-left pb-2.5 pr-4 text-[#555] font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                        <th key={h} className="text-left pb-2.5 pr-4 text-[var(--text-faint)] font-semibold uppercase tracking-wider text-[10px]">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {assignment.students.map((s, i) => (
-                                    <tr key={s.studentId} className="border-b border-[#1a1a2e] hover:bg-[#1a1a2e]/50 transition-colors">
+                                    <tr key={s.studentId} className="border-b border-[var(--bg-surface-alt)] hover:bg-[var(--bg-surface-alt)]/50 transition-colors">
                                         <td className="py-2.5 pr-4">
                                             <span className="font-bold" style={{
                                                 color: s.rank === 1 ? '#f0c040' : s.rank === 2 ? '#b0b8c8' : s.rank === 3 ? '#cd7f32' : '#555'
                                             }}>#{s.rank}</span>
                                         </td>
                                         <td className="py-2.5 pr-4">
-                                            <p className="text-white font-medium">{s.name}</p>
-                                            <p className="text-[#444] text-[10px]">{s.email}</p>
+                                            <p className="text-[var(--text-strong)] font-medium">{s.name}</p>
+                                            <p className="text-[var(--text-faintest)] text-[10px]">{s.email}</p>
                                         </td>
                                         <td className="py-2.5 pr-4">
                                             <span className={`font-bold text-sm ${s.bestScore >= 70 ? 'text-[#3fb950]' : s.bestScore >= 40 ? 'text-[#f0a500]' : 'text-[#f85149]'}`}>
                                                 {s.bestScore}
                                             </span>
-                                            <span className="text-[#444]">/100</span>
+                                            <span className="text-[var(--text-faintest)]">/100</span>
                                         </td>
-                                        <td className="py-2.5 pr-4 text-[#888]">{s.attempts}</td>
+                                        <td className="py-2.5 pr-4 text-[var(--text-muted)]">{s.attempts}</td>
                                         <td className="py-2.5 pr-4">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.completed
                                                     ? 'bg-[#3fb950]/10 text-[#3fb950] border border-[#3fb950]/30'
@@ -377,7 +377,7 @@ export function AnalyticsView({ onBack }) {
                                             </span>
                                         </td>
                                         <td className="py-2.5 pr-4 min-w-[80px]">
-                                            <div className="w-20 bg-[#0d0d1a] rounded-full h-1.5 overflow-hidden">
+                                            <div className="w-20 bg-[var(--bg-surface)] rounded-full h-1.5 overflow-hidden">
                                                 <div className="h-full rounded-full" style={{
                                                     width: `${s.bestScore}%`,
                                                     background: s.completed ? GREEN : s.bestScore >= 40 ? AMBER : RED
