@@ -244,6 +244,8 @@ export default function StudentDashboard() {
   const [codePrefilled, setCodePrefilled] = useState(false);
   const [showResults, setShowResults] = useState(false); // results slide-in overlay
   const [infoTab, setInfoTab] = useState('description');  // LeetCode-style panel tab
+  const [activeShot, setActiveShot] = useState(0);        // active screenshot in gallery
+  const [lightbox, setLightbox] = useState(null);         // lightbox URL
 
   useEffect(() => {
     getAssignments()
@@ -264,6 +266,8 @@ export default function StudentDashboard() {
     setCodePrefilled(false);
     setShowResults(false);
     setInfoTab('description'); // reset panel tab
+    setActiveShot(0);          // reset screenshot gallery
+    setLightbox(null);
 
     // If the student has a previous best submission, load that code into the editor
     const p = progress[assignment._id];
@@ -500,8 +504,8 @@ export default function StudentDashboard() {
                           type="button"
                           onClick={() => setInfoTab(tab.key)}
                           className={`px-3 py-2.5 text-[13px] font-medium transition-colors border-b-2 -mb-px ${infoTab === tab.key
-                              ? 'border-[#4e9af1] text-white'
-                              : 'border-transparent text-[#555] hover:text-[#888]'
+                            ? 'border-[#4e9af1] text-white'
+                            : 'border-transparent text-[#555] hover:text-[#888]'
                             }`}
                         >
                           {tab.label}
@@ -519,30 +523,110 @@ export default function StudentDashboard() {
                             {selectedAssignment.title}
                           </h2>
 
-                          {/* Reference image — small inline thumbnail */}
-                          {selectedAssignment.referenceScreenshotUrl && (
-                            <div className="mb-5">
-                              <div className="relative inline-block w-full overflow-hidden rounded-lg border border-[#2a2a4a] group" style={{ maxHeight: '180px' }}>
-                                <img
-                                  src={selectedAssignment.referenceScreenshotUrl}
-                                  alt="Reference design"
-                                  className="w-full object-cover object-top"
-                                  style={{ maxHeight: '180px' }}
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-end p-2.5 opacity-0 group-hover:opacity-100">
+                          {/* ── Reference Screenshots Gallery ── */}
+                          {(() => {
+                            // Prefer the array, fall back to single URL
+                            const shots = (selectedAssignment.referenceScreenshots?.length > 0)
+                              ? selectedAssignment.referenceScreenshots
+                              : selectedAssignment.referenceScreenshotUrl
+                                ? [selectedAssignment.referenceScreenshotUrl]
+                                : [];
+
+                            if (shots.length === 0) return null;
+
+                            const stateLabels = ['Initial', 'Scrolled', 'Bottom', 'State 4', 'State 5', 'State 6'];
+
+                            return (
+                              <div className="mb-5">
+                                {/* Main preview */}
+                                <div className="relative rounded-lg border border-[#2a2a4a] overflow-hidden group bg-black"
+                                  style={{ height: '170px' }}>
+                                  <img
+                                    src={shots[activeShot]}
+                                    alt={`Reference state ${activeShot + 1}`}
+                                    className="w-full h-full object-cover object-top cursor-zoom-in"
+                                    onClick={() => setLightbox(shots[activeShot])}
+                                  />
+                                  {/* State badge */}
+                                  <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/60 px-2 py-0.5 rounded-full">
+                                    {stateLabels[activeShot] ?? `State ${activeShot + 1}`}
+                                  </span>
+                                  {/* Open full size */}
                                   <a
-                                    href={selectedAssignment.referenceScreenshotUrl}
+                                    href={shots[activeShot]}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[11px] font-semibold text-white bg-black/60 px-2.5 py-1 rounded-md hover:bg-black/80"
+                                    className="absolute top-2 right-2 text-[10px] font-semibold text-white bg-black/60 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
                                   >
-                                    View full size ↗
+                                    ↗ Full size
                                   </a>
+                                  {/* Prev/Next arrows — only if multiple */}
+                                  {shots.length > 1 && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveShot(i => (i - 1 + shots.length) % shots.length)}
+                                        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
+                                      >‹</button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveShot(i => (i + 1) % shots.length)}
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80 transition-colors"
+                                      >›</button>
+                                    </>
+                                  )}
                                 </div>
+
+                                {/* Thumbnail strip — horizontal scroll */}
+                                {shots.length > 1 && (
+                                  <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-thin">
+                                    {shots.map((url, i) => (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => setActiveShot(i)}
+                                        className={`shrink-0 relative overflow-hidden rounded border transition-all ${activeShot === i
+                                          ? 'border-[#4e9af1] ring-1 ring-[#4e9af1]/40'
+                                          : 'border-[#2a2a4a] opacity-60 hover:opacity-90'
+                                          }`}
+                                        style={{ width: '60px', height: '40px' }}
+                                      >
+                                        <img src={url} alt={`State ${i + 1}`} className="w-full h-full object-cover object-top" />
+                                        <span className="absolute bottom-0 left-0 right-0 text-center text-[8px] font-bold text-white bg-black/60 leading-tight py-0.5">
+                                          {stateLabels[i] ?? `${i + 1}`}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <p className="text-[10px] text-[#444] mt-1.5">
+                                  Reference design · {shots.length} screenshot{shots.length !== 1 ? 's' : ''}
+                                </p>
+
+                                {/* Lightbox */}
+                                {lightbox && (
+                                  <div
+                                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+                                    onClick={() => setLightbox(null)}
+                                  >
+                                    <img
+                                      src={lightbox}
+                                      alt="Full size reference"
+                                      className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                                      onClick={e => e.stopPropagation()}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setLightbox(null)}
+                                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 text-sm"
+                                    >✕</button>
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-[11px] text-[#444] mt-1.5">Reference design</p>
-                            </div>
-                          )}
+                            );
+                          })()}
+
 
                           {/* Description body — clean prose, no card */}
                           {selectedAssignment.description ? (

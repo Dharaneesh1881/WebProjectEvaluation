@@ -34,9 +34,9 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
     evalSpec: { domTests, styleTests, interactionTests: intTests, functionalityTests: fnTests }
   });
 
-  // Capture reference screenshot asynchronously
+  // Capture reference screenshots asynchronously (multiple states)
   let referenceScreenshotUrl = null;
-  const tempDir = `/tmp/baseline-${assignment._id}`;
+  const referenceScreenshots = [];
   let browser = null;
 
   try {
@@ -62,24 +62,74 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
     });
     await new Promise(r => setTimeout(r, 400));
 
-    const screenshotBuffer = await page.screenshot({ type: 'png' });
+    // Helper: take a screenshot and push to array
+    const capture = async (label) => {
+      const buf = await page.screenshot({ type: 'png' });
+      const url = await uploadScreenshot(buf, `assignments/${assignment._id}`, label);
+      referenceScreenshots.push(url);
+      return url;
+    };
 
-    referenceScreenshotUrl = await uploadScreenshot(
-      screenshotBuffer,
-      `assignments/${assignment._id}`,
-      'reference'
-    );
+    // 1. Initial viewport (always taken)
+    referenceScreenshotUrl = await capture('reference_1_initial');
 
+    // 2. Check if page is taller than viewport → scroll & capture
+    const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    const viewHeight = 720;
+    if (pageHeight > viewHeight + 100) {
+      // Scroll to 50% of page
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
+      await new Promise(r => setTimeout(r, 200));
+      await capture('reference_2_midscroll');
+
+      // Scroll to bottom
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await new Promise(r => setTimeout(r, 200));
+      await capture('reference_3_bottom');
+
+      // Scroll back to top
+      await page.evaluate(() => window.scrollTo(0, 0));
+    }
+
+    // 3. Detect interactive elements that may reveal new content
+    //    (tab/nav buttons, accordion triggers, show-more buttons)
+    const interactiveSelectors = [
+      'button:not([type="submit"])',
+      '[role="tab"]',
+      'nav a',
+      '.tab', '.nav-item', '.accordion-btn',
+    ];
+
+    for (const sel of interactiveSelectors) {
+      const elements = await page.$$(sel);
+      // Click up to 3 distinct interactive elements to capture different UI states
+      let clicked = 0;
+      for (const el of elements) {
+        if (clicked >= 3) break;
+        try {
+          const visible = await el.isIntersectingViewport();
+          if (!visible) continue;
+          await el.click();
+          await new Promise(r => setTimeout(r, 350));
+          const label = `reference_${referenceScreenshots.length + 1}_interaction`;
+          await capture(label);
+          clicked++;
+        } catch { /* element may have disappeared, skip */ }
+      }
+      if (clicked > 0) break; // One selector group found interactions, stop
+    }
+
+    // Update assignment with all screenshots
     await Assignment.findByIdAndUpdate(assignment._id, {
       referenceScreenshotUrl,
+      referenceScreenshots,
       baselineGeneratedAt: new Date()
     });
+
   } catch (err) {
     console.error('Baseline capture failed:', err.message);
   } finally {
     if (browser) await browser.close();
-    await fs.remove(tempDir).catch(() => { });
-    // Also clean up the temp file from buildPage
     await fs.remove(`/tmp/eval-baseline-${assignment._id}`).catch(() => { });
   }
 
@@ -92,14 +142,17 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
       functionality: fnTests.length,
       interaction: intTests.length
     },
-    referenceScreenshotUrl
+    referenceScreenshotUrl,
+    referenceScreenshots,
+    screenshotCount: referenceScreenshots.length
   });
 });
+
 
 // GET /api/assignments — list all active assignments
 router.get('/', requireAuth, async (req, res) => {
   const assignments = await Assignment.find({ isActive: true })
-    .select('_id title description referenceScreenshotUrl createdBy createdAt')
+    .select('_id title description referenceScreenshotUrl referenceScreenshots createdBy createdAt')
     .sort({ createdAt: -1 });
   return res.json(assignments);
 });

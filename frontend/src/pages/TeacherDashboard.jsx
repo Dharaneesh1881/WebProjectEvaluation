@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
+import { AnalyticsView } from '../components/AnalyticsView.jsx';
 import { getAssignments, createAssignment, getAssignmentSubmissions, updateAssignmentTests, deleteAssignment, getLeaderboard, getTeacherStudentSubmission } from '../api/index.js';
-import { FiAward, FiRefreshCw, FiBookOpen, FiPlus, FiLogOut, FiChevronRight, FiBarChart2, FiList } from 'react-icons/fi';
+import { FiAward, FiRefreshCw, FiBookOpen, FiPlus, FiLogOut, FiChevronRight, FiBarChart2, FiList, FiPieChart } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 
 function AssignmentCard({ a, onViewSubmissions, onEditTests, onDelete, deletingId }) {
@@ -630,6 +631,7 @@ export default function TeacherDashboard() {
           {[
             { id: 'list', icon: FiList, label: 'Assignments' },
             { id: 'leaderboard', icon: FiBarChart2, label: 'Leaderboard' },
+            { id: 'analytics', icon: FiPieChart, label: 'Analytics' },
             { id: 'create', icon: FiPlus, label: 'New Assignment' },
           ].map(item => (
             <button
@@ -646,8 +648,8 @@ export default function TeacherDashboard() {
                 }
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${view === item.id
-                  ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
-                  : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
+                ? 'bg-[#2f80ed]/10 text-[#4e9af1] border border-[#2f80ed]/25'
+                : 'text-[#666] hover:text-[#bbb] hover:bg-[#1a1a2e]'
                 }`}
             >
               <item.icon size={16} />
@@ -678,9 +680,10 @@ export default function TeacherDashboard() {
             {view === 'list' ? 'Assignments' :
               view === 'create' ? 'New Assignment' :
                 view === 'leaderboard' ? 'Leaderboard' :
-                  view === 'submissions' ? `Submissions — ${selectedAssignment?.title}` :
-                    view === 'editTests' ? `Edit Tests — ${selectedAssignment?.title}` :
-                      view === 'studentDetail' ? 'Student Submission' : view}
+                  view === 'analytics' ? 'Analytics' :
+                    view === 'submissions' ? `Submissions — ${selectedAssignment?.title}` :
+                      view === 'editTests' ? `Edit Tests — ${selectedAssignment?.title}` :
+                        view === 'studentDetail' ? 'Student Submission' : view}
           </h1>
         </header>
 
@@ -696,6 +699,11 @@ export default function TeacherDashboard() {
             </div>
           ) : (
             <div className="px-8 py-8">
+
+              {/* ── ANALYTICS VIEW ── */}
+              {view === 'analytics' && (
+                <AnalyticsView onBack={() => setView('list')} />
+              )}
 
               {/* ── LEADERBOARD VIEW ── */}
               {view === 'leaderboard' && (
@@ -777,22 +785,34 @@ export default function TeacherDashboard() {
                     </div>
                   ) : (
                     <form onSubmit={handleCreate} className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-[#888] mb-1.5">Assignment title *</label>
-                          <input type="text" required value={form.title}
-                            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                            className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
-                            placeholder="e.g. Quiz App Recreation" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-[#888] mb-1.5">Description</label>
-                          <input type="text" value={form.description}
-                            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                            className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
-                            placeholder="Brief description for students" />
-                        </div>
+                      {/* Title — full width */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#888] mb-1.5">Assignment title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={form.title}
+                          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                          className="w-full px-3 py-2.5 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1]"
+                          placeholder="e.g. Quiz App Recreation"
+                        />
                       </div>
+
+                      {/* Description — full width, tall textarea, directly below title */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#888] mb-1.5">
+                          Description
+                          <span className="ml-1 text-[#444] font-normal normal-case">— explain the assignment for students</span>
+                        </label>
+                        <textarea
+                          value={form.description}
+                          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                          rows={12}
+                          className="w-full px-3 py-3 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-sm text-white placeholder:text-[#3a3a5a] focus:outline-none focus:border-[#4e9af1] resize-y leading-relaxed"
+                          placeholder={"Describe what students need to build.\n\nExample:\n1. Overview — what the app does\n2. Requirements — specific features expected\n3. Examples — any input/output examples\n4. Notes — constraints or hints"}
+                        />
+                      </div>
+
 
                       <div>
                         <label className="block text-xs font-semibold text-[#888] mb-1.5">Reference code *</label>
