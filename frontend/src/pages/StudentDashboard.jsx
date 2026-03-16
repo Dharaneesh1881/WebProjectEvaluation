@@ -5,6 +5,7 @@ import { CodeEditor } from '../components/CodeEditor.jsx';
 import { MultiFileUpload } from '../components/MultiFileUpload.jsx';
 import { FileList } from '../components/FileList.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
+import { LiveRunner } from '../components/LiveRunner.jsx';
 import { GeminiChatbot } from '../components/GeminiChatbot.jsx';
 import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
 import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu, FiSun, FiMoon } from 'react-icons/fi';
@@ -265,6 +266,7 @@ export default function StudentDashboard() {
   const [infoTab, setInfoTab] = useState('description');  // LeetCode-style panel tab
   const [activeShot, setActiveShot] = useState(0);        // active screenshot in gallery
   const [lightbox, setLightbox] = useState(null);         // lightbox URL
+  const [showRunner, setShowRunner] = useState(false);    // live preview panel
 
   useEffect(() => {
     getAssignments()
@@ -304,6 +306,7 @@ export default function StudentDashboard() {
     setInfoTab('description'); // reset panel tab
     setActiveShot(0);          // reset screenshot gallery
     setLightbox(null);
+    setShowRunner(false);
 
     // If the student has a previous best submission, load that code into the editor
     const p = progress[assignment._id];
@@ -762,7 +765,7 @@ export default function StudentDashboard() {
 
               {/* ── RIGHT: Code Editor + Results ── */}
               <div className="flex-1 min-w-0 min-h-0 flex flex-col xl:flex-row overflow-hidden">
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <div className={`flex min-w-0 flex-col overflow-hidden ${showRunner ? 'xl:w-[min(50%,600px)] xl:flex-none' : 'flex-1'}`}>
 
                   {/* Best-code prefilled banner */}
                   {codePrefilled && (
@@ -827,6 +830,19 @@ export default function StudentDashboard() {
 
                   {/* Submit bar */}
                   <div className="shrink-0 px-4 py-3 sm:px-5 bg-[#0a0a16] border-t border-[var(--border-color)] flex flex-wrap items-center gap-3 sm:gap-4 sm:pr-24 xl:pr-5">
+                    {/* ▶ Run — toggles live preview panel */}
+                    <button
+                      onClick={() => setShowRunner(s => !s)}
+                      disabled={!hasHtmlFile(files) || loadingCode}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all
+                        disabled:opacity-40 disabled:cursor-not-allowed
+                        ${showRunner
+                          ? 'bg-[#f0a500]/15 border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/25'
+                          : 'bg-[var(--bg-surface-alt)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-[var(--border-light)]'}`}
+                      title={showRunner ? 'Close live preview' : 'Run code in live preview'}
+                    >
+                      {showRunner ? '◼ Close Preview' : '▶ Run'}
+                    </button>
                     <button
                       onClick={handleSubmit}
                       disabled={isEvaluating || loadingCode}
@@ -852,6 +868,19 @@ export default function StudentDashboard() {
                       </button>
                     ) : null}
                   </div>
+                </div>
+
+                {/* ── Live Runner Panel ── */}
+                <div className={`flex flex-col overflow-hidden transition-all duration-300
+                  ${showRunner
+                    ? 'flex-1 min-w-[320px] border-t xl:border-t-0 xl:border-l border-[var(--border-color)]'
+                    : 'w-0 opacity-0 pointer-events-none'}`}>
+                  <LiveRunner
+                    files={files}
+                    assignment={selectedAssignment}
+                    isVisible={showRunner}
+                    onClose={() => setShowRunner(false)}
+                  />
                 </div>
 
                 {showResults && status === 'done' && result && (
