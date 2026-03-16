@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
     FiShield, FiUsers, FiBookOpen, FiFileText, FiBarChart2,
     FiRefreshCw, FiTrash2, FiEye, FiPlay, FiLogOut, FiToggleLeft, FiToggleRight,
-    FiAlertCircle, FiCheckCircle, FiClock, FiActivity, FiSearch, FiChevronRight
+    FiAlertCircle, FiCheckCircle, FiClock, FiActivity, FiSearch, FiChevronRight,
+    FiPackage, FiPlus, FiX, FiLink, FiEdit2
 } from 'react-icons/fi';
 import { MdCheckCircle, MdCancel } from 'react-icons/md';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
@@ -217,9 +218,14 @@ function AssignmentsView() {
     const [loading, setLoading] = useState(true);
     const [toggling, setToggling] = useState(null);
     const [deleting, setDeleting] = useState(null);
+    const [allPolicies, setAllPolicies] = useState([]);
+    const [libraryModal, setLibraryModal] = useState(null); // { assignmentId, policyIds }
+    const [regenerating, setRegenerating] = useState(null);
+    const [regenMsg, setRegenMsg] = useState({});
 
     useEffect(() => {
         adminFetch('/admin/assignments').then(setAssignments).finally(() => setLoading(false));
+        adminFetch('/admin/library-policies').then(setAllPolicies).catch(() => {});
     }, []);
 
     const handleToggle = async (id) => {
@@ -239,6 +245,24 @@ function AssignmentsView() {
             setAssignments(prev => prev.filter(a => a._id !== id));
         } catch (e) { alert(e.message); }
         finally { setDeleting(null); }
+    };
+
+    const handleRegenerate = async (id) => {
+        setRegenerating(id);
+        setRegenMsg(prev => ({ ...prev, [id]: '' }));
+        try {
+            const d = await adminFetch(`/admin/assignments/${id}/regenerate-baseline`, { method: 'POST' });
+            setRegenMsg(prev => ({ ...prev, [id]: `✓ Baseline regenerated (${d.screenshotCount} screenshots)` }));
+            // Update the thumbnail in the list
+            if (d.referenceScreenshotUrl) {
+                setAssignments(prev => prev.map(a =>
+                    a._id === id ? { ...a, referenceScreenshotUrl: d.referenceScreenshotUrl } : a
+                ));
+            }
+        } catch (e) {
+            setRegenMsg(prev => ({ ...prev, [id]: '✗ ' + e.message }));
+        }
+        finally { setRegenerating(null); }
     };
 
     return (
@@ -264,8 +288,25 @@ function AssignmentsView() {
                                         <span>avg {Math.round(a.stats?.avgScore ?? 0)}/100</span>
                                         <span>{new Date(a.createdAt).toLocaleDateString()}</span>
                                     </div>
+                                    {(a.allowedLibraryPolicyIds?.length > 0) && (
+                                        <p className="text-[10px] text-[#a371f7] mt-1">{a.allowedLibraryPolicyIds.length} librar{a.allowedLibraryPolicyIds.length === 1 ? 'y' : 'ies'} linked</p>
+                                    )}
+                                    {regenMsg[a._id] && (
+                                        <p className={`text-[10px] mt-1 ${regenMsg[a._id].startsWith('✓') ? 'text-[#3fb950]' : 'text-[#f85149]'}`}>{regenMsg[a._id]}</p>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        onClick={() => setLibraryModal({ assignmentId: a._id, policyIds: a.allowedLibraryPolicyIds || [] })}
+                                        title="Manage library policies"
+                                        className="p-1.5 rounded-lg text-[#555] hover:text-[#a371f7] hover:bg-[#a371f7]/10 transition-colors">
+                                        <FiPackage size={15} />
+                                    </button>
+                                    <button onClick={() => handleRegenerate(a._id)} disabled={regenerating === a._id}
+                                        title="Regenerate reference screenshot (use after linking library policies)"
+                                        className="p-1.5 rounded-lg text-[#555] hover:text-[#f0a500] hover:bg-[#f0a500]/10 transition-colors disabled:opacity-40">
+                                        {regenerating === a._id ? <Spinner /> : <FiRefreshCw size={14} />}
+                                    </button>
                                     <button onClick={() => handleToggle(a._id)} disabled={toggling === a._id}
                                         className="p-1.5 rounded-lg text-[#555] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-colors" title="Toggle active">
                                         {a.isActive ? <FiToggleRight size={18} className="text-[#3fb950]" /> : <FiToggleLeft size={18} />}
@@ -280,6 +321,18 @@ function AssignmentsView() {
                     ))}
                     {assignments.length === 0 && <p className="text-[#555] text-center py-10">No assignments found.</p>}
                 </div>
+            )}
+
+            {libraryModal && (
+                <AssignmentLibraryManager
+                    assignmentId={libraryModal.assignmentId}
+                    currentPolicyIds={libraryModal.policyIds}
+                    allPolicies={allPolicies}
+                    onClose={() => setLibraryModal(null)}
+                    onSave={(policyIds) => setAssignments(prev =>
+                        prev.map(a => a._id === libraryModal.assignmentId ? { ...a, allowedLibraryPolicyIds: policyIds } : a)
+                    )}
+                />
             )}
         </div>
     );
@@ -524,11 +577,304 @@ function ProgressView() {
     );
 }
 
+// ── Library Policies ──────────────────────────────────────────────────────────
+
+function LibraryPoliciesView() {
+    const [policies, setPolicies] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
+    const [togglingId, setTogglingId] = useState(null);
+    const [showForm, setShowForm] = useState(false);
+    const [form, setForm] = useState({ name: '', version: '', cdnUrls: '' });
+    const [error, setError] = useState('');
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', version: '', cdnUrls: '' });
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError] = useState('');
+
+    const load = () => {
+        setLoading(true);
+        adminFetch('/admin/library-policies').then(setPolicies).finally(() => setLoading(false));
+    };
+    useEffect(() => { load(); }, []);
+
+    const handleAdd = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (!form.name.trim() || !form.version.trim()) { setError('Name and version are required.'); return; }
+        setSaving(true);
+        try {
+            const urls = form.cdnUrls.split('\n').map(u => u.trim()).filter(Boolean);
+            const policy = await adminFetch('/admin/library-policies', {
+                method: 'POST',
+                body: JSON.stringify({ name: form.name.trim(), version: form.version.trim(), cdnUrls: urls })
+            });
+            setPolicies(prev => [...prev, policy].sort((a, b) => a.name.localeCompare(b.name)));
+            setForm({ name: '', version: '', cdnUrls: '' });
+            setShowForm(false);
+        } catch (e) { setError(e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleToggle = async (id, currentEnabled) => {
+        setTogglingId(id);
+        try {
+            const updated = await adminFetch(`/admin/library-policies/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ enabled: !currentEnabled })
+            });
+            setPolicies(prev => prev.map(p => p._id === id ? updated : p));
+        } catch (e) { alert(e.message); }
+        finally { setTogglingId(null); }
+    };
+
+    const handleDelete = async (id, name) => {
+        if (!window.confirm(`Remove library "${name}" from the system? Assignments using it will lose this policy.`)) return;
+        setDeletingId(id);
+        try {
+            await adminFetch(`/admin/library-policies/${id}`, { method: 'DELETE' });
+            setPolicies(prev => prev.filter(p => p._id !== id));
+        } catch (e) { alert(e.message); }
+        finally { setDeletingId(null); }
+    };
+
+    const startEdit = (p) => {
+        setEditingId(p._id);
+        setEditForm({ name: p.name, version: p.version, cdnUrls: (p.cdnUrls || []).join('\n') });
+        setEditError('');
+    };
+
+    const handleEditSave = async (id) => {
+        if (!editForm.name.trim() || !editForm.version.trim()) { setEditError('Name and version are required.'); return; }
+        setEditSaving(true);
+        try {
+            const urls = editForm.cdnUrls.split('\n').map(u => u.trim()).filter(Boolean);
+            const updated = await adminFetch(`/admin/library-policies/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ name: editForm.name.trim(), version: editForm.version.trim(), cdnUrls: urls })
+            });
+            setPolicies(prev => prev.map(p => p._id === id ? updated : p));
+            setEditingId(null);
+        } catch (e) { setEditError(e.message); }
+        finally { setEditSaving(false); }
+    };
+
+    return (
+        <div>
+            <SectionHeader action={
+                <button onClick={() => setShowForm(s => !s)}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#4e9af1]/10 border border-[#4e9af1]/30 text-[#4e9af1] hover:bg-[#4e9af1]/20 transition-colors">
+                    <FiPlus size={12} /> Add Library
+                </button>
+            }>
+                Library Policies ({policies.length})
+            </SectionHeader>
+
+            <p className="text-xs text-[#555] mb-5">
+                Define which CDN libraries students may load, pinned to exact versions.
+                URL-prefix matching ensures Bootstrap 5.3.0 is allowed but 5.2 is blocked.
+            </p>
+
+            {/* Add form */}
+            {showForm && (
+                <form onSubmit={handleAdd} className="bg-[#10101e] border border-[#4e9af1]/30 rounded-xl p-5 mb-5 space-y-3">
+                    <p className="text-sm font-bold text-white mb-1">New Library Policy</p>
+                    {error && <p className="text-xs text-[#f85149] bg-[#f85149]/10 border border-[#f85149]/20 rounded-lg px-3 py-2">{error}</p>}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-[#666] block mb-1">Library Name</label>
+                            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                placeholder="Bootstrap"
+                                className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#4e9af1]/50" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-[#666] block mb-1">Fixed Version</label>
+                            <input value={form.version} onChange={e => setForm(f => ({ ...f, version: e.target.value }))}
+                                placeholder="5.3.0"
+                                className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-sm text-white placeholder-[#444] focus:outline-none focus:border-[#4e9af1]/50" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs text-[#666] block mb-1">Allowed CDN URL Prefixes <span className="text-[#444]">(one per line)</span></label>
+                        <textarea value={form.cdnUrls} onChange={e => setForm(f => ({ ...f, cdnUrls: e.target.value }))}
+                            rows={4} placeholder={"https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/\nhttps://stackpath.bootstrapcdn.com/bootstrap/5.3.0/"}
+                            className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-xs font-mono text-white placeholder-[#333] focus:outline-none focus:border-[#4e9af1]/50 resize-none" />
+                        <p className="text-[10px] text-[#444] mt-1">Any CDN URL that starts with one of these prefixes is allowed. Wrong versions are blocked automatically.</p>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                        <button type="submit" disabled={saving}
+                            className="px-4 py-2 text-xs font-bold bg-[#4e9af1] text-white rounded-lg hover:bg-[#3a85e0] transition-colors disabled:opacity-50">
+                            {saving ? 'Saving…' : 'Save Policy'}
+                        </button>
+                        <button type="button" onClick={() => { setShowForm(false); setError(''); }}
+                            className="px-4 py-2 text-xs font-semibold text-[#666] border border-[#1e1e30] rounded-lg hover:border-[#333] transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {loading ? <div className="flex justify-center py-20"><Spinner /></div> : (
+                <div className="space-y-3">
+                    {policies.map(p => (
+                        <div key={p._id} className={`bg-[#10101e] border rounded-xl p-4 transition-colors ${deletingId === p._id ? 'opacity-40' : 'border-[#1e1e30]'}`}>
+                            {editingId === p._id ? (
+                                <div className="space-y-3">
+                                    {editError && <p className="text-xs text-[#f85149] bg-[#f85149]/10 border border-[#f85149]/20 rounded-lg px-3 py-2">{editError}</p>}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-xs text-[#666] block mb-1">Library Name</label>
+                                            <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                                                className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-sm text-white focus:outline-none focus:border-[#4e9af1]/50" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-[#666] block mb-1">Fixed Version</label>
+                                            <input value={editForm.version} onChange={e => setEditForm(f => ({ ...f, version: e.target.value }))}
+                                                className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-sm text-white focus:outline-none focus:border-[#4e9af1]/50" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-[#666] block mb-1">Allowed CDN URL Prefixes <span className="text-[#444]">(one per line)</span></label>
+                                        <textarea value={editForm.cdnUrls} onChange={e => setEditForm(f => ({ ...f, cdnUrls: e.target.value }))}
+                                            rows={4}
+                                            className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#1e1e30] rounded-lg text-xs font-mono text-white focus:outline-none focus:border-[#4e9af1]/50 resize-none" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleEditSave(p._id)} disabled={editSaving}
+                                            className="px-4 py-2 text-xs font-bold bg-[#4e9af1] text-white rounded-lg hover:bg-[#3a85e0] transition-colors disabled:opacity-50">
+                                            {editSaving ? 'Saving…' : 'Save'}
+                                        </button>
+                                        <button onClick={() => { setEditingId(null); setEditError(''); }}
+                                            className="px-4 py-2 text-xs font-semibold text-[#666] border border-[#1e1e30] rounded-lg hover:border-[#333] transition-colors">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 rounded-lg bg-[#4e9af1]/10 shrink-0">
+                                        <FiPackage size={16} className="text-[#4e9af1]" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                                            <span className="text-sm font-bold text-white">{p.name}</span>
+                                            <Badge color="blue">v{p.version}</Badge>
+                                            <Badge color={p.enabled ? 'green' : 'gray'}>{p.enabled ? 'Enabled' : 'Disabled'}</Badge>
+                                        </div>
+                                        {p.cdnUrls?.length > 0 ? (
+                                            <div className="space-y-0.5">
+                                                {p.cdnUrls.map((url, i) => (
+                                                    <p key={i} className="flex items-center gap-1 text-[10px] font-mono text-[#555] truncate">
+                                                        <FiLink size={9} className="shrink-0 text-[#444]" />
+                                                        {url}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-[10px] text-[#f0a500]">No CDN URL prefixes defined — add URLs to enforce version.</p>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <button onClick={() => startEdit(p)} title="Edit"
+                                            className="p-1.5 rounded-lg text-[#555] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-colors">
+                                            <FiEdit2 size={14} />
+                                        </button>
+                                        <button onClick={() => handleToggle(p._id, p.enabled)} disabled={togglingId === p._id}
+                                            title={p.enabled ? 'Disable' : 'Enable'}
+                                            className="p-1.5 rounded-lg text-[#555] hover:text-[#4e9af1] hover:bg-[#4e9af1]/10 transition-colors">
+                                            {p.enabled ? <FiToggleRight size={18} className="text-[#3fb950]" /> : <FiToggleLeft size={18} />}
+                                        </button>
+                                        <button onClick={() => handleDelete(p._id, p.name)} disabled={deletingId === p._id}
+                                            className="p-1.5 rounded-lg text-[#555] hover:text-[#f85149] hover:bg-[#f85149]/10 transition-colors">
+                                            <FiTrash2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {policies.length === 0 && (
+                        <div className="text-center py-16 text-[#555]">
+                            <FiPackage size={32} className="mx-auto mb-3 text-[#333]" />
+                            <p className="text-sm">No library policies yet.</p>
+                            <p className="text-xs mt-1">Click &quot;Add Library&quot; to define the first approved CDN library.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Assignment Library Policy Binding ─────────────────────────────────────────
+
+function AssignmentLibraryManager({ assignmentId, currentPolicyIds, allPolicies, onClose, onSave }) {
+    const [selected, setSelected] = useState(new Set(currentPolicyIds || []));
+    const [saving, setSaving] = useState(false);
+
+    const toggle = (id) => setSelected(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await adminFetch(`/admin/assignments/${assignmentId}/library-policies`, {
+                method: 'PATCH',
+                body: JSON.stringify({ policyIds: Array.from(selected) })
+            });
+            onSave(Array.from(selected));
+            onClose();
+        } catch (e) { alert(e.message); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-[#10101e] border border-[#1e1e30] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-white">Assign Library Policies</h3>
+                    <button onClick={onClose} className="p-1 text-[#555] hover:text-white transition-colors"><FiX size={16} /></button>
+                </div>
+                <p className="text-xs text-[#555] mb-4">Only enabled, version-pinned libraries will be allowed in this assignment's sandbox.</p>
+                <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
+                    {allPolicies.filter(p => p.enabled).map(p => (
+                        <label key={p._id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${selected.has(p._id) ? 'border-[#4e9af1]/50 bg-[#4e9af1]/10' : 'border-[#1e1e30] hover:border-[#2a2a3a]'}`}>
+                            <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggle(p._id)} className="accent-[#4e9af1]" />
+                            <div>
+                                <span className="text-sm font-semibold text-white">{p.name}</span>
+                                <Badge color="blue" className="ml-2">v{p.version}</Badge>
+                            </div>
+                        </label>
+                    ))}
+                    {allPolicies.filter(p => p.enabled).length === 0 && (
+                        <p className="text-xs text-[#555] text-center py-6">No enabled library policies. Add some in the Libraries tab first.</p>
+                    )}
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={handleSave} disabled={saving}
+                        className="flex-1 py-2 text-xs font-bold bg-[#4e9af1] text-white rounded-lg hover:bg-[#3a85e0] transition-colors disabled:opacity-50">
+                        {saving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button onClick={onClose}
+                        className="flex-1 py-2 text-xs font-semibold text-[#666] border border-[#1e1e30] rounded-lg hover:border-[#333] transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
     { id: 'overview', icon: FiBarChart2, label: 'Overview' },
     { id: 'assignments', icon: FiBookOpen, label: 'Assignments' },
+    { id: 'libraries', icon: FiPackage, label: 'Libraries' },
     { id: 'users', icon: FiUsers, label: 'Users' },
     { id: 'submissions', icon: FiFileText, label: 'Submissions' },
     { id: 'progress', icon: FiActivity, label: 'Progress' },
@@ -644,6 +990,7 @@ export default function AdminDashboard() {
                     {activeTab === 'overview' &&
                         <OverviewView stats={stats} loading={statsLoading} onRefresh={fetchStats} />}
                     {activeTab === 'assignments' && <AssignmentsView />}
+                    {activeTab === 'libraries' && <LibraryPoliciesView />}
                     {activeTab === 'users' && <UsersView />}
                     {activeTab === 'submissions' && <SubmissionsView />}
                     {activeTab === 'progress' && <ProgressView />}

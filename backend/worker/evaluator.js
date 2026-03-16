@@ -29,6 +29,7 @@ import { runLighthouse } from './lighthouseRunner.js';
 import { resolveAllowedDomains } from './networkPolicy.js';
 import { calculateScore } from './scoreCalculator.js';
 import { getMainFile, mergeFilesByType, normalizeStoredFiles } from '../utils/projectFiles.js';
+import LibraryPolicy from '../models/LibraryPolicy.js';
 
 const redisPub = new IORedis({
   host: process.env.REDIS_HOST || 'localhost',
@@ -72,6 +73,13 @@ export async function runEvaluation(submissionId, assignmentId) {
   const spec = assignment.evalSpec;
   const allowedDomains = resolveAllowedDomains(assignment.allowedCdnDomains);
 
+  // Resolve versioned URL prefixes from linked LibraryPolicies
+  const policyIds = assignment.allowedLibraryPolicyIds || [];
+  const activePolicies = policyIds.length > 0
+    ? await LibraryPolicy.find({ _id: { $in: policyIds }, enabled: true })
+    : [];
+  const allowedUrlPrefixes = activePolicies.flatMap(p => p.cdnUrls || []);
+
   // ── 1. Build temp file ─────────────────────────────────────────────────
   const { filePath, dir, pageFilePaths } = await buildPage(submissionId, files);
   const fileUrl = `file://${filePath}`;
@@ -103,14 +111,14 @@ export async function runEvaluation(submissionId, assignmentId) {
       // ── 5. Functionality tests (40 marks) ──────────────────────────────
       const fnTests = spec.functionalityTests ?? [];
       console.log(`[${submissionId}] Functionality tests (${fnTests.length} cases)...`);
-      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests, allowedDomains);
+      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests, allowedDomains, allowedUrlPrefixes);
       console.log(`[${submissionId}] Functionality score: ${functionalityResult.score}/40`);
 
       // ── 6. Interaction tests (15 marks) ────────────────────────────────
       const intTests = spec.interactionTests ?? [];
       if (intTests.length > 0) {
         console.log(`[${submissionId}] Interaction tests (${intTests.length} tests)...`);
-        interactionResults = await runInteractionTests(browser, fileUrl, intTests, allowedDomains);
+        interactionResults = await runInteractionTests(browser, fileUrl, intTests, allowedDomains, allowedUrlPrefixes);
       }
 
       // ── 7. Visual test (20 marks — grayscale pixelmatch) ────────────────
@@ -122,7 +130,8 @@ export async function runEvaluation(submissionId, assignmentId) {
           submissionId,
           assignmentId,
           referencePages: resolveReferencePages(assignment),
-          allowedDomains
+          allowedDomains,
+          allowedUrlPrefixes
         }
       );
     } finally {

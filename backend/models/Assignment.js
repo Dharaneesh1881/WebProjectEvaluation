@@ -10,6 +10,9 @@ const fileSchema = new mongoose.Schema({
 const pageScreenshotSchema = new mongoose.Schema({
   pageName: { type: String, required: true, trim: true },
   url: { type: String, required: true },
+  captureKey: { type: String, default: null },
+  captureLabel: { type: String, default: null },
+  scrollY: { type: Number, default: 0 },
   isMain: { type: Boolean, default: false }
 }, { _id: false });
 
@@ -31,6 +34,7 @@ const assignmentSchema = new mongoose.Schema({
   referenceScreenshots: { type: [String], default: [] },  // multi-state screenshots
   referencePageScreenshots: { type: [pageScreenshotSchema], default: [] },
   allowedCdnDomains: { type: [String], default: [] },
+  allowedLibraryPolicyIds: { type: [String], default: [] }, // LibraryPolicy _id refs
   baselineGeneratedAt: { type: Date, default: null },
 
   isActive: { type: Boolean, default: true },

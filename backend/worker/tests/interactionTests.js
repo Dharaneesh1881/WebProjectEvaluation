@@ -14,11 +14,11 @@
 
 import { enableRequestWhitelist } from '../networkPolicy.js';
 
-async function setupInteractivePage(browser, url, allowedDomains = []) {
+async function setupInteractivePage(browser, url, allowedDomains = [], allowedUrlPrefixes = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  await enableRequestWhitelist(page, allowedDomains);
+  await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
 
   await page.evaluateOnNewDocument(() => {
     window._alertCalled = false;
@@ -63,11 +63,11 @@ async function checkAssertion(page, assertion) {
   }, assertion);
 }
 
-export async function runInteractionTests(browser, url, tests, allowedDomains = []) {
+export async function runInteractionTests(browser, url, tests, allowedDomains = [], allowedUrlPrefixes = []) {
   const results = [];
 
   for (const test of tests) {
-    const { context, page } = await setupInteractivePage(browser, url, allowedDomains);
+    const { context, page } = await setupInteractivePage(browser, url, allowedDomains, allowedUrlPrefixes);
     let passed = false;
 
     try {

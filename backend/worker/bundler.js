@@ -40,10 +40,19 @@ function ensureDocumentShell(html) {
   return documentHtml;
 }
 
+function isCdnUrl(attr) {
+  return /=["']\s*https?:\/\//i.test(attr) || /=["']\s*\/\//i.test(attr);
+}
+
 function stripBundledAssetTags(html) {
+  // Only strip local <link rel="stylesheet"> and <script src>, keep CDN links intact
   return html
-    .replace(/<link\b[^>]*rel=["'][^"']*stylesheet[^"']*["'][^>]*>/gi, '')
-    .replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>\s*<\/script>/gi, '');
+    .replace(/<link\b[^>]*rel=["'][^"']*stylesheet[^"']*["'][^>]*>/gi, (match) =>
+      isCdnUrl(match) ? match : ''
+    )
+    .replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>\s*<\/script>/gi, (match) =>
+      isCdnUrl(match) ? match : ''
+    );
 }
 
 function escapeEmbeddedCode(code, tagName) {

@@ -13,6 +13,13 @@ import {
   normalizeAllowedDomains,
   resolveAllowedDomains
 } from '../worker/networkPolicy.js';
+import LibraryPolicy from '../models/LibraryPolicy.js';
+import {
+  SCREENSHOT_VIEWPORT,
+  captureViewportScreenshot,
+  getPageCaptureTargets,
+  preparePageForScreenshot
+} from '../worker/screenshotCapture.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import {
   getMainFile,
@@ -31,7 +38,8 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
     files: incomingFiles,
     functionalityTests,
     interactionTests,
-    allowedCdnDomains = []
+    allowedCdnDomains = [],
+    allowedLibraryPolicyIds = []
   } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'title is required' });
 
@@ -57,6 +65,13 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
   const intTests = Array.isArray(interactionTests) ? interactionTests : [];
   const normalizedAllowedCdnDomains = normalizeAllowedDomains(allowedCdnDomains);
   const effectiveAllowedDomains = resolveAllowedDomains(normalizedAllowedCdnDomains);
+  const policyIds = Array.isArray(allowedLibraryPolicyIds) ? allowedLibraryPolicyIds : [];
+
+  // Resolve versioned URL prefixes from linked LibraryPolicies (for reference screenshot)
+  const activePolicies = policyIds.length > 0
+    ? await LibraryPolicy.find({ _id: { $in: policyIds }, enabled: true })
+    : [];
+  const effectiveUrlPrefixes = activePolicies.flatMap(p => p.cdnUrls || []);
 
   const assignment = await Assignment.create({
     title,
@@ -64,6 +79,7 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
     createdBy: req.user.id,
     files: normalized.files,
     allowedCdnDomains: normalizedAllowedCdnDomains,
+    allowedLibraryPolicyIds: policyIds,
     evalSpec: { domTests, styleTests, interactionTests: intTests, functionalityTests: fnTests }
   });
 
@@ -81,34 +97,37 @@ router.post('/', requireAuth, requireRole('teacher'), async (req, res) => {
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-    await enableRequestWhitelist(page, effectiveAllowedDomains);
+    await page.setViewport(SCREENSHOT_VIEWPORT);
+    await enableRequestWhitelist(page, effectiveAllowedDomains, effectiveUrlPrefixes);
 
     for (const bundledPage of bundle.pages) {
       const pagePath = pageFilePaths[bundledPage.name];
-      await page.goto(`file://${pagePath}`, { waitUntil: 'networkidle0', timeout: 10000 });
-      await page.addStyleTag({
-        content: '*, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }'
-      });
-      await new Promise(r => setTimeout(r, 300));
-
-      const buffer = await page.screenshot({ type: 'png', fullPage: false });
+      await preparePageForScreenshot(page, `file://${pagePath}`, 10000);
+      const captureTargets = await getPageCaptureTargets(page);
       const safePageName = bundledPage.name.replace(/[^\w.-]+/g, '_');
-      const url = await uploadScreenshot(
-        buffer,
-        `assignments/${assignment._id}`,
-        `reference_${safePageName}`
-      );
 
-      referencePageScreenshots.push({
-        pageName: bundledPage.name,
-        url,
-        isMain: bundledPage.isMain
-      });
-      referenceScreenshots.push(url);
+      for (let i = 0; i < captureTargets.length; i += 1) {
+        const capture = captureTargets[i];
+        const buffer = await captureViewportScreenshot(page, capture.scrollY, 'png');
+        const url = await uploadScreenshot(
+          buffer,
+          `assignments/${assignment._id}`,
+          `reference_${safePageName}_${capture.key}`
+        );
 
-      if (bundledPage.isMain) {
-        referenceScreenshotUrl = url;
+        referencePageScreenshots.push({
+          pageName: bundledPage.name,
+          url,
+          captureKey: capture.key,
+          captureLabel: capture.label,
+          scrollY: capture.scrollY,
+          isMain: bundledPage.isMain && i === 0
+        });
+        referenceScreenshots.push(url);
+
+        if (bundledPage.isMain && i === 0) {
+          referenceScreenshotUrl = url;
+        }
       }
     }
 
@@ -164,12 +183,13 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // PATCH /api/assignments/:id — teacher updates functionality/interaction tests
 router.patch('/:id', requireAuth, requireRole('teacher'), async (req, res) => {
-  const { functionalityTests, interactionTests, allowedCdnDomains } = req.body;
+  const { functionalityTests, interactionTests, allowedCdnDomains, allowedLibraryPolicyIds } = req.body;
 
   const update = {};
   if (Array.isArray(functionalityTests)) update['evalSpec.functionalityTests'] = functionalityTests;
   if (Array.isArray(interactionTests)) update['evalSpec.interactionTests'] = interactionTests;
   if (Array.isArray(allowedCdnDomains)) update.allowedCdnDomains = normalizeAllowedDomains(allowedCdnDomains);
+  if (Array.isArray(allowedLibraryPolicyIds)) update.allowedLibraryPolicyIds = allowedLibraryPolicyIds;
 
   if (Object.keys(update).length === 0)
     return res.status(400).json({ error: 'Nothing to update' });
@@ -183,7 +203,8 @@ router.patch('/:id', requireAuth, requireRole('teacher'), async (req, res) => {
     assignmentId: assignment._id,
     functionalityTests: assignment.evalSpec.functionalityTests.length,
     interactionTests: assignment.evalSpec.interactionTests.length,
-    allowedCdnDomains: assignment.allowedCdnDomains || []
+    allowedCdnDomains: assignment.allowedCdnDomains || [],
+    allowedLibraryPolicyIds: assignment.allowedLibraryPolicyIds || []
   });
 });
 

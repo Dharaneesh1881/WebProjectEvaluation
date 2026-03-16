@@ -1,10 +1,26 @@
 import { Router } from 'express';
+import puppeteer from 'puppeteer';
+import fs from 'fs-extra';
 import { adminLogin, requireAdmin } from '../middleware/adminAuth.js';
 import Assignment from '../models/Assignment.js';
 import StudentProgress from '../models/StudentProgress.js';
 import Submission from '../models/Submission.js';
 import EvaluationRun from '../models/EvaluationRun.js';
 import User from '../models/User.js';
+import LibraryPolicy from '../models/LibraryPolicy.js';
+import { buildPage } from '../worker/pageBuilder.js';
+import {
+  enableRequestWhitelist,
+  normalizeAllowedDomains,
+  resolveAllowedDomains
+} from '../worker/networkPolicy.js';
+import { uploadScreenshot } from '../utils/cloudinary.js';
+import {
+  SCREENSHOT_VIEWPORT,
+  captureViewportScreenshot,
+  getPageCaptureTargets,
+  preparePageForScreenshot
+} from '../worker/screenshotCapture.js';
 
 const router = Router();
 
@@ -15,13 +31,18 @@ router.post('/admin/login', adminLogin);
 // ── Dashboard Stats ──────────────────────────────────────────────────────────
 // GET /api/admin/stats
 router.get('/admin/stats', requireAdmin, async (req, res) => {
-    const [assignments, users, submissions, evalRuns, progress] = await Promise.all([
+    const [assignments, users, transientSubmissionCount, evalRuns, progress] = await Promise.all([
         Assignment.countDocuments(),
         User.countDocuments(),
-        Submission.countDocuments(),
+        Submission.countDocuments({ status: { $in: ['pending', 'processing', 'error'] } }),
         EvaluationRun.countDocuments(),
         StudentProgress.find({})
     ]);
+
+    const bestSubmissionCount = new Set(
+        progress.map((record) => record.bestSubmissionId).filter(Boolean)
+    ).size;
+    const submissions = bestSubmissionCount + transientSubmissionCount;
 
     const completedCount = progress.filter(p => p.completed).length;
     const avgScore = progress.length
@@ -109,38 +130,114 @@ router.get('/admin/submissions', requireAdmin, async (req, res) => {
     if (assignmentId) filter.assignmentId = assignmentId;
     if (studentId) filter.studentId = studentId;
 
-    const [submissions, total] = await Promise.all([
-        Submission.find(filter).sort({ submittedAt: -1 }).skip(Number(skip)).limit(Number(limit)),
-        Submission.countDocuments(filter)
+    const [progressRecords, transientSubmissions] = await Promise.all([
+        StudentProgress.find(filter)
+            .select('studentId assignmentId bestSubmissionId bestScore completed attempts updatedAt')
+            .sort({ updatedAt: -1 }),
+        Submission.find({
+            ...filter,
+            status: { $in: ['pending', 'processing', 'error'] }
+        }).sort({ submittedAt: -1 })
     ]);
 
-    const sids = submissions.map(s => s.submissionId);
+    const bestSubmissionIds = progressRecords
+        .map((record) => record.bestSubmissionId)
+        .filter(Boolean);
+
+    const bestSubmissions = await Submission.find({ submissionId: { $in: bestSubmissionIds } });
+    const submissionById = new Map(bestSubmissions.map((submission) => [submission.submissionId, submission]));
+    const progressBySubmissionId = new Map(
+        progressRecords
+            .filter((record) => record.bestSubmissionId)
+            .map((record) => [record.bestSubmissionId, record])
+    );
+
+    const merged = new Map();
+
+    for (const record of progressRecords) {
+        if (!record.bestSubmissionId) continue;
+
+        const submission = submissionById.get(record.bestSubmissionId);
+        if (submission) {
+            merged.set(record.bestSubmissionId, {
+                ...submission.toObject(),
+                bestScore: record.bestScore,
+                completed: record.completed,
+                attempts: record.attempts
+            });
+            continue;
+        }
+
+        merged.set(record.bestSubmissionId, {
+            submissionId: record.bestSubmissionId,
+            assignmentId: record.assignmentId,
+            studentId: record.studentId,
+            status: 'missing',
+            submittedAt: record.updatedAt,
+            files: [],
+            bestScore: record.bestScore,
+            completed: record.completed,
+            attempts: record.attempts
+        });
+    }
+
+    for (const submission of transientSubmissions) {
+        if (!merged.has(submission.submissionId)) {
+            merged.set(submission.submissionId, submission.toObject());
+        }
+    }
+
+    const orderedSubmissions = Array.from(merged.values()).sort((a, b) =>
+        new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+    );
+
+    const pagedSubmissions = orderedSubmissions.slice(Number(skip), Number(skip) + Number(limit));
+    const sids = pagedSubmissions.map(s => s.submissionId);
     const evalRuns = await EvaluationRun.find({ submissionId: { $in: sids } });
     const runMap = Object.fromEntries(evalRuns.map(r => [r.submissionId, r]));
 
-    const userIds = [...new Set(submissions.map(s => s.studentId))];
+    const userIds = [...new Set(pagedSubmissions.map(s => s.studentId).filter(Boolean))];
     const users = await User.find({ _id: { $in: userIds } }).select('name email');
     const userMap = Object.fromEntries(users.map(u => [u._id.toString(), u]));
 
-    const result = submissions.map(s => ({
-        ...s.toObject(),
+    const result = pagedSubmissions.map(s => ({
+        ...s,
+        bestScore: s.bestScore ?? progressBySubmissionId.get(s.submissionId)?.bestScore ?? null,
+        completed: s.completed ?? progressBySubmissionId.get(s.submissionId)?.completed ?? false,
+        attempts: s.attempts ?? progressBySubmissionId.get(s.submissionId)?.attempts ?? null,
         evalRun: runMap[s.submissionId] || null,
         studentName: userMap[s.studentId]?.name || 'Unknown',
         studentEmail: userMap[s.studentId]?.email || ''
     }));
 
-    return res.json({ submissions: result, total });
+    return res.json({ submissions: result, total: orderedSubmissions.length });
 });
 
 // GET /api/admin/submissions/:submissionId — full detail
 router.get('/admin/submissions/:submissionId', requireAdmin, async (req, res) => {
-    const [submission, evalRun] = await Promise.all([
+    let [submission, evalRun] = await Promise.all([
         Submission.findOne({ submissionId: req.params.submissionId }),
         EvaluationRun.findOne({ submissionId: req.params.submissionId })
     ]);
-    if (!submission) return res.status(404).json({ error: 'Not found' });
 
-    const user = await User.findById(submission.studentId).select('name email');
+    let user = null;
+    if (!submission) {
+        const progress = await StudentProgress.findOne({ bestSubmissionId: req.params.submissionId });
+        if (!progress) return res.status(404).json({ error: 'Not found' });
+
+        user = await User.findById(progress.studentId).select('name email');
+        submission = {
+            submissionId: progress.bestSubmissionId,
+            assignmentId: progress.assignmentId,
+            studentId: progress.studentId,
+            status: evalRun ? 'done' : 'missing',
+            submittedAt: progress.updatedAt,
+            files: []
+        };
+    } else {
+        user = await User.findById(submission.studentId).select('name email');
+    }
+
     return res.json({ submission, evalRun: evalRun || null, student: user });
 });
 
@@ -196,6 +293,172 @@ router.get('/admin/progress', requireAdmin, async (req, res) => {
 router.delete('/admin/progress/:id', requireAdmin, async (req, res) => {
     await StudentProgress.findByIdAndDelete(req.params.id);
     return res.json({ success: true });
+});
+
+// ── Library Policies ──────────────────────────────────────────────────────────
+// GET /api/admin/library-policies
+router.get('/admin/library-policies', requireAdmin, async (req, res) => {
+    const policies = await LibraryPolicy.find({}).sort({ name: 1, version: 1 });
+    return res.json(policies);
+});
+
+// POST /api/admin/library-policies
+router.post('/admin/library-policies', requireAdmin, async (req, res) => {
+    const { name, version, cdnUrls } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+    if (!version?.trim()) return res.status(400).json({ error: 'version is required' });
+    const urls = Array.isArray(cdnUrls) ? cdnUrls.map(u => u.trim()).filter(Boolean) : [];
+    const policy = await LibraryPolicy.create({ name: name.trim(), version: version.trim(), cdnUrls: urls });
+    return res.status(201).json(policy);
+});
+
+// PATCH /api/admin/library-policies/:id  (update version / urls / enabled)
+router.patch('/admin/library-policies/:id', requireAdmin, async (req, res) => {
+    const { name, version, cdnUrls, enabled } = req.body;
+    const update = {};
+    if (name !== undefined) update.name = name.trim();
+    if (version !== undefined) update.version = version.trim();
+    if (Array.isArray(cdnUrls)) update.cdnUrls = cdnUrls.map(u => u.trim()).filter(Boolean);
+    if (enabled !== undefined) update.enabled = Boolean(enabled);
+    const policy = await LibraryPolicy.findByIdAndUpdate(req.params.id, { $set: update }, { new: true });
+    if (!policy) return res.status(404).json({ error: 'Not found' });
+    return res.json(policy);
+});
+
+// DELETE /api/admin/library-policies/:id
+router.delete('/admin/library-policies/:id', requireAdmin, async (req, res) => {
+    await LibraryPolicy.findByIdAndDelete(req.params.id);
+    // Also remove this policy from any assignment that referenced it
+    await Assignment.updateMany(
+        { allowedLibraryPolicyIds: req.params.id },
+        { $pull: { allowedLibraryPolicyIds: req.params.id } }
+    );
+    return res.json({ success: true });
+});
+
+// PATCH /api/admin/assignments/:id/library-policies  — set which policies apply to an assignment
+// Also extracts CDN domains from policy URLs and merges into allowedCdnDomains automatically
+router.patch('/admin/assignments/:id/library-policies', requireAdmin, async (req, res) => {
+    const { policyIds } = req.body;
+    if (!Array.isArray(policyIds)) return res.status(400).json({ error: 'policyIds must be an array' });
+
+    // Fetch the policies to extract their domains
+    const policies = policyIds.length > 0
+        ? await LibraryPolicy.find({ _id: { $in: policyIds }, enabled: true })
+        : [];
+
+    // Extract hostnames from policy CDN URL prefixes
+    const policyDomains = [];
+    for (const policy of policies) {
+        for (const cdnUrl of policy.cdnUrls || []) {
+            try {
+                const { hostname } = new URL(cdnUrl);
+                if (hostname && !policyDomains.includes(hostname)) policyDomains.push(hostname);
+            } catch { /* skip invalid URLs */ }
+        }
+    }
+
+    // Fetch current assignment to merge domains
+    const current = await Assignment.findById(req.params.id);
+    if (!current) return res.status(404).json({ error: 'Assignment not found' });
+
+    // Merge policy domains into existing allowedCdnDomains
+    const existingDomains = current.allowedCdnDomains || [];
+    const mergedDomains = normalizeAllowedDomains([...existingDomains, ...policyDomains]);
+
+    const assignment = await Assignment.findByIdAndUpdate(
+        req.params.id,
+        { $set: { allowedLibraryPolicyIds: policyIds, allowedCdnDomains: mergedDomains } },
+        { new: true }
+    );
+    return res.json({
+        assignmentId: assignment._id,
+        allowedLibraryPolicyIds: assignment.allowedLibraryPolicyIds,
+        allowedCdnDomains: assignment.allowedCdnDomains
+    });
+});
+
+// POST /api/admin/assignments/:id/regenerate-baseline
+// Re-captures reference screenshots using the assignment's current CDN policy config
+router.post('/admin/assignments/:id/regenerate-baseline', requireAdmin, async (req, res) => {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+    if (!assignment.files || assignment.files.length === 0)
+        return res.status(400).json({ error: 'Assignment has no files to render' });
+
+    // Resolve allowed domains + URL prefixes from library policies
+    const allowedDomains = resolveAllowedDomains(assignment.allowedCdnDomains);
+    const policyIds = assignment.allowedLibraryPolicyIds || [];
+    const activePolicies = policyIds.length > 0
+        ? await LibraryPolicy.find({ _id: { $in: policyIds }, enabled: true })
+        : [];
+    const allowedUrlPrefixes = activePolicies.flatMap(p => p.cdnUrls || []);
+
+    let browser = null;
+    const referenceScreenshots = [];
+    const referencePageScreenshots = [];
+    let referenceScreenshotUrl = null;
+
+    try {
+        const { pageFilePaths, bundle } = await buildPage(`baseline-${assignment._id}`, assignment.files);
+
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+        const page = await browser.newPage();
+        await page.setViewport(SCREENSHOT_VIEWPORT);
+        await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
+
+        for (const bundledPage of bundle.pages) {
+            const pagePath = pageFilePaths[bundledPage.name];
+            await preparePageForScreenshot(page, `file://${pagePath}`, 10000);
+            const captureTargets = await getPageCaptureTargets(page);
+            const safePageName = bundledPage.name.replace(/[^\w.-]+/g, '_');
+
+            for (let i = 0; i < captureTargets.length; i++) {
+                const capture = captureTargets[i];
+                const buffer = await captureViewportScreenshot(page, capture.scrollY, 'png');
+                const url = await uploadScreenshot(
+                    buffer,
+                    `assignments/${assignment._id}`,
+                    `reference_${safePageName}_${capture.key}`
+                );
+
+                referencePageScreenshots.push({
+                    pageName: bundledPage.name,
+                    url,
+                    captureKey: capture.key,
+                    captureLabel: capture.label,
+                    scrollY: capture.scrollY,
+                    isMain: bundledPage.isMain && i === 0
+                });
+                referenceScreenshots.push(url);
+
+                if (bundledPage.isMain && i === 0) referenceScreenshotUrl = url;
+            }
+        }
+
+        await Assignment.findByIdAndUpdate(assignment._id, {
+            referenceScreenshotUrl,
+            referenceScreenshots,
+            referencePageScreenshots,
+            baselineGeneratedAt: new Date()
+        });
+
+        return res.json({
+            success: true,
+            referenceScreenshotUrl,
+            screenshotCount: referenceScreenshots.length
+        });
+
+    } catch (err) {
+        console.error('Baseline regeneration failed:', err.message);
+        return res.status(500).json({ error: 'Baseline regeneration failed: ' + err.message });
+    } finally {
+        if (browser) await browser.close();
+        await fs.remove(`/tmp/eval-baseline-${assignment._id}`).catch(() => {});
+    }
 });
 
 export default router;

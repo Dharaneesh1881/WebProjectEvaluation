@@ -2,6 +2,12 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { uploadScreenshot, downloadImageAsBuffer } from '../utils/cloudinary.js';
 import { enableRequestWhitelist } from './networkPolicy.js';
+import {
+  SCREENSHOT_VIEWPORT,
+  captureViewportScreenshot,
+  formatCaptureName,
+  preparePageForScreenshot
+} from './screenshotCapture.js';
 
 // ── Convert PNG to grayscale in-place ──────────────────────────────────────
 // Removes color differences so layout/structure dominates the comparison.
@@ -19,23 +25,18 @@ function toGrayscale(png) {
   }
 }
 
-async function setupPage(browser, allowedDomains = []) {
+async function setupPage(browser, allowedDomains = [], allowedUrlPrefixes = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  await enableRequestWhitelist(page, allowedDomains);
-
-  await page.setViewport({ width: 1280, height: 720 });
+  await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
+  await page.setViewport(SCREENSHOT_VIEWPORT);
   return { context, page };
 }
 
-async function capturePageScreenshot(page, url) {
-  await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
-  await page.addStyleTag({
-    content: '*, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }'
-  });
-  await new Promise(r => setTimeout(r, 300));
-  return page.screenshot({ fullPage: false });
+async function capturePageScreenshot(page, url, scrollY = 0) {
+  await preparePageForScreenshot(page, url, 8000);
+  return captureViewportScreenshot(page, scrollY);
 }
 
 export async function runVisualTest(browser, {
@@ -43,7 +44,8 @@ export async function runVisualTest(browser, {
   submissionId,
   assignmentId,
   referencePages = [],
-  allowedDomains = []
+  allowedDomains = [],
+  allowedUrlPrefixes = []
 }) {
   const noBaseline = {
     diffPercent: 100,
@@ -59,52 +61,40 @@ export async function runVisualTest(browser, {
     return noBaseline;
   }
 
-  const { context, page } = await setupPage(browser, allowedDomains);
+  const { context, page } = await setupPage(browser, allowedDomains, allowedUrlPrefixes);
   const results = [];
-  const referenceByPage = new Map(referencePages.map((pageRef) => [pageRef.pageName, pageRef]));
   const studentPageNames = Object.keys(pageFilePaths || {});
-  const allPageNames = Array.from(new Set([
-    ...referencePages.map((pageRef) => pageRef.pageName),
-    ...studentPageNames
-  ]));
+  const expectedPageNames = new Set(referencePages.map((pageRef) => pageRef.pageName));
 
   try {
-    for (const pageName of allPageNames) {
-      const referencePage = referenceByPage.get(pageName) || null;
-      const localPagePath = pageFilePaths?.[pageName];
+    for (const referencePage of referencePages) {
+      const displayName = formatCaptureName(referencePage.pageName, referencePage.captureLabel);
+      const localPagePath = pageFilePaths?.[referencePage.pageName];
       let screenshotBuffer = null;
       let studentScreenshotUrl = null;
 
       if (localPagePath) {
-        screenshotBuffer = await capturePageScreenshot(page, `file://${localPagePath}`);
+        screenshotBuffer = await capturePageScreenshot(
+          page,
+          `file://${localPagePath}`,
+          referencePage.scrollY ?? 0
+        );
 
         try {
           studentScreenshotUrl = await uploadScreenshot(
             Buffer.from(screenshotBuffer),
             `submissions/${assignmentId}`,
-            `student_${submissionId}_${pageName.replace(/[^\w.-]+/g, '_')}`
+            `student_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}`
           );
         } catch (err) {
           console.error('Failed to upload student screenshot:', err.message);
         }
       }
 
-      if (!referencePage) {
-        results.push({
-          pageName,
-          diffPercent: 100,
-          diffScore: 0,
-          studentScreenshotUrl,
-          referenceScreenshotUrl: null,
-          diffImageUrl: null,
-          error: 'Unexpected extra student page'
-        });
-        continue;
-      }
-
       if (!localPagePath) {
         results.push({
-          pageName,
+          pageName: displayName,
+          sourcePageName: referencePage.pageName,
           diffPercent: 100,
           diffScore: 0,
           studentScreenshotUrl: null,
@@ -121,7 +111,8 @@ export async function runVisualTest(browser, {
       } catch (err) {
         console.error('Failed to download reference screenshot:', err.message);
         results.push({
-          pageName,
+          pageName: displayName,
+          sourcePageName: referencePage.pageName,
           diffPercent: 100,
           diffScore: 0,
           studentScreenshotUrl,
@@ -138,7 +129,8 @@ export async function runVisualTest(browser, {
       if (img1.width !== img2.width || img1.height !== img2.height) {
         console.warn('Screenshot dimension mismatch — visual test returns 0');
         results.push({
-          pageName,
+          pageName: displayName,
+          sourcePageName: referencePage.pageName,
           diffPercent: 100,
           diffScore: 0,
           studentScreenshotUrl,
@@ -166,19 +158,47 @@ export async function runVisualTest(browser, {
         diffImageUrl = await uploadScreenshot(
           diffBuffer,
           `submissions/${assignmentId}`,
-          `diff_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}`
+          `diff_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}`
         );
       } catch (err) {
         console.error('Failed to upload diff image:', err.message);
       }
 
       results.push({
-        pageName,
+        pageName: displayName,
+        sourcePageName: referencePage.pageName,
         diffPercent,
         diffScore,
         studentScreenshotUrl,
         referenceScreenshotUrl: referencePage.url,
         diffImageUrl
+      });
+    }
+
+    for (const pageName of studentPageNames) {
+      if (expectedPageNames.has(pageName)) continue;
+
+      let studentScreenshotUrl = null;
+      try {
+        const screenshotBuffer = await capturePageScreenshot(page, `file://${pageFilePaths[pageName]}`, 0);
+        studentScreenshotUrl = await uploadScreenshot(
+          Buffer.from(screenshotBuffer),
+          `submissions/${assignmentId}`,
+          `student_${submissionId}_${pageName.replace(/[^\w.-]+/g, '_')}_unexpected`
+        );
+      } catch (err) {
+        console.error('Failed to capture extra student page screenshot:', err.message);
+      }
+
+      results.push({
+        pageName: pageName,
+        sourcePageName: pageName,
+        diffPercent: 100,
+        diffScore: 0,
+        studentScreenshotUrl,
+        referenceScreenshotUrl: null,
+        diffImageUrl: null,
+        error: 'Unexpected extra student page'
       });
     }
   } finally {
@@ -188,7 +208,7 @@ export async function runVisualTest(browser, {
   if (results.length === 0) return noBaseline;
 
   const mainResult = results.find((result) =>
-    referencePages.find((pageRef) => pageRef.pageName === result.pageName)?.isMain
+    referencePages.find((pageRef) => pageRef.pageName === result.sourcePageName && pageRef.isMain)
   ) || results[0];
 
   const avgDiffPercent = parseFloat(

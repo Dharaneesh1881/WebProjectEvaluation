@@ -236,6 +236,12 @@ function AssignmentCard({ a, progress, onStart }) {
   );
 }
 
+function formatReferenceShotLabel(shot, fallbackIndex) {
+  if (!shot) return `Page ${fallbackIndex + 1}`;
+  if (shot.captureLabel) return `${shot.pageName} · ${shot.captureLabel}`;
+  return shot.pageName || `Page ${fallbackIndex + 1}`;
+}
+
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -267,6 +273,21 @@ export default function StudentDashboard() {
       .finally(() => setLoadingList(false));
     // Also fetch student progress for badges
     getStudentProgress().then(setProgress).catch(console.error);
+
+    // Poll every 30s so baseline screenshot updates (from admin regeneration) reflect automatically
+    const interval = setInterval(() => {
+      getAssignments()
+        .then(fresh => {
+          setAssignments(fresh);
+          // If a specific assignment is open, sync its reference screenshots too
+          setSelectedAssignment(prev =>
+            prev ? (fresh.find(a => a._id === prev._id) ?? prev) : null
+          );
+        })
+        .catch(() => {});
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleStart = async (assignment) => {
@@ -583,7 +604,7 @@ export default function StudentDashboard() {
                                   />
                                   {/* State badge */}
                                   <span className="absolute top-2 left-2 text-[10px] font-bold text-[var(--text-strong)] bg-black/60 px-2 py-0.5 rounded-full">
-                                    {pageShots[activeShot]?.pageName || `Page ${activeShot + 1}`}
+                                    {formatReferenceShotLabel(pageShots[activeShot], activeShot)}
                                   </span>
                                   {/* Open full size */}
                                   <a
@@ -627,7 +648,7 @@ export default function StudentDashboard() {
                                       >
                                         <img src={shot.url} alt={`Page ${i + 1}`} className="w-full h-full object-cover object-top" />
                                         <span className="absolute bottom-0 left-0 right-0 text-center text-[8px] font-bold text-[var(--text-strong)] bg-black/60 leading-tight py-0.5">
-                                          {shot.pageName || `${i + 1}`}
+                                          {shot.captureLabel || shot.pageName || `${i + 1}`}
                                         </span>
                                       </button>
                                     ))}
