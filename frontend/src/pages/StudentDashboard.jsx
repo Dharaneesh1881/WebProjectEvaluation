@@ -7,7 +7,7 @@ import { FileList } from '../components/FileList.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { LiveRunner } from '../components/LiveRunner.jsx';
 import { GeminiChatbot } from '../components/GeminiChatbot.jsx';
-import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, socket } from '../api/index.js';
+import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, getAssignmentPreview, socket } from '../api/index.js';
 import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu, FiSun, FiMoon } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 import {
@@ -267,6 +267,9 @@ export default function StudentDashboard() {
   const [activeShot, setActiveShot] = useState(0);        // active screenshot in gallery
   const [lightbox, setLightbox] = useState(null);         // lightbox URL
   const [showRunner, setShowRunner] = useState(false);    // live preview panel
+  const [showTargetOutput, setShowTargetOutput] = useState(false); // target output panel
+  const [targetHtml, setTargetHtml]             = useState('');
+  const [targetLoading, setTargetLoading]       = useState(false);
 
   useEffect(() => {
     getAssignments()
@@ -307,6 +310,8 @@ export default function StudentDashboard() {
     setActiveShot(0);          // reset screenshot gallery
     setLightbox(null);
     setShowRunner(false);
+    setShowTargetOutput(false);
+    setTargetHtml('');
 
     // If the student has a previous best submission, load that code into the editor
     const p = progress[assignment._id];
@@ -324,6 +329,27 @@ export default function StudentDashboard() {
       } finally {
         setLoadingCode(false);
       }
+    }
+  };
+
+  const handleViewTargetOutput = async () => {
+    if (showTargetOutput) {
+      setShowTargetOutput(false);
+      return;
+    }
+    if (targetHtml) {
+      setShowTargetOutput(true);
+      return;
+    }
+    setTargetLoading(true);
+    try {
+      const { html } = await getAssignmentPreview(selectedAssignment._id);
+      setTargetHtml(html);
+      setShowTargetOutput(true);
+    } catch (err) {
+      console.error('Failed to load target output:', err);
+    } finally {
+      setTargetLoading(false);
     }
   };
 
@@ -843,6 +869,22 @@ export default function StudentDashboard() {
                     >
                       {showRunner ? '◼ Close Preview' : '▶ Run'}
                     </button>
+                    {/* 🎯 View Target Output */}
+                    <button
+                      onClick={handleViewTargetOutput}
+                      disabled={targetLoading}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all
+                        disabled:opacity-40 disabled:cursor-not-allowed
+                        ${showTargetOutput
+                          ? 'bg-[#4e9af1]/15 border border-[#4e9af1]/40 text-[#4e9af1] hover:bg-[#4e9af1]/25'
+                          : 'bg-[var(--bg-surface-alt)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:border-[var(--border-light)]'}`}
+                      title={showTargetOutput ? 'Close target output' : 'View target output'}
+                    >
+                      {targetLoading ? (
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-current/30 border-t-current animate-spin inline-block" />
+                      ) : '🎯'}
+                      {showTargetOutput ? 'Close Target' : 'View Target'}
+                    </button>
                     <button
                       onClick={handleSubmit}
                       disabled={isEvaluating || loadingCode}
@@ -881,6 +923,44 @@ export default function StudentDashboard() {
                     isVisible={showRunner}
                     onClose={() => setShowRunner(false)}
                   />
+                </div>
+
+                {/* ── Target Output Panel ── */}
+                <div className={`flex flex-col overflow-hidden transition-all duration-300
+                  ${showTargetOutput
+                    ? 'flex-1 min-w-[320px] border-t xl:border-t-0 xl:border-l border-[var(--border-color)]'
+                    : 'w-0 opacity-0 pointer-events-none'}`}>
+                  {showTargetOutput && (
+                    <>
+                      {/* Header */}
+                      <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5
+                                      bg-[var(--bg-surface-alt)] border-b border-[var(--border-color)]">
+                        <span className="text-xs font-semibold text-[#4e9af1]">🎯 Target Output</span>
+                        <button
+                          onClick={() => setShowTargetOutput(false)}
+                          className="w-5 h-5 rounded flex items-center justify-center text-xs
+                                     text-[var(--text-faint)] hover:text-[var(--text-strong)]
+                                     hover:bg-[var(--border-color)] transition-colors"
+                        >✕</button>
+                      </div>
+                      {/* iframe */}
+                      <div className="flex-1 min-h-0 bg-white">
+                        {targetHtml ? (
+                          <iframe
+                            srcDoc={targetHtml}
+                            sandbox="allow-scripts"
+                            title="Target Output"
+                            className="w-full h-full border-none block"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center
+                                          text-[var(--text-faintest)] text-sm">
+                            Loading…
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {showResults && status === 'done' && result && (

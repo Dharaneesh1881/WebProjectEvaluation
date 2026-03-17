@@ -90,6 +90,13 @@ export async function deleteAssignment(assignmentId) {
   return handleResponse(res);  // { success, message, deletedSubmissions }
 }
 
+export async function getAssignmentPreview(assignmentId) {
+  const res = await fetch(`${API_BASE}/assignments/${assignmentId}/preview`, {
+    headers: authHeaders()
+  });
+  return handleResponse(res); // { html: string }
+}
+
 export async function getAssignmentSubmissions(assignmentId) {
   const res = await fetch(`${API_BASE}/assignments/${assignmentId}/submissions`, {
     headers: authHeaders()

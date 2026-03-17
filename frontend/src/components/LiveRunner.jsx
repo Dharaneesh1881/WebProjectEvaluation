@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { buildPreviewHtml } from '../utils/clientBundler.js';
-import { buildSecurityHarness } from '../utils/securityHarness.js';
+import { buildRunnerPage } from '../utils/runnerBuilder.js';
 
 const METHOD_COLOR = {
   log:   'text-[var(--text-main)]',
@@ -31,10 +30,11 @@ const TIMEOUT_HTML = `<html><body style="margin:0;padding:24px;font-family:monos
  * @param {{ files, assignment, isVisible, onClose }} props
  */
 export function LiveRunner({ files, assignment, isVisible, onClose }) {
-  const [srcdoc, setSrcdoc]               = useState('');
-  const [isRunning, setIsRunning]         = useState(false);
-  const [consoleLogs, setConsoleLogs]     = useState([]);
-  const [runError, setRunError]           = useState(null);
+  const [srcdoc, setSrcdoc]                   = useState('');
+  const [isRunning, setIsRunning]             = useState(false);
+  const [consoleLogs, setConsoleLogs]         = useState([]);
+  const [runError, setRunError]               = useState(null);
+  const [blockedLibraries, setBlockedLibraries] = useState([]);
 
   const iframeRef    = useRef(null);
   const killTimerRef = useRef(null);
@@ -69,19 +69,19 @@ export function LiveRunner({ files, assignment, isVisible, onClose }) {
     setRunError(null);
     setSrcdoc('');
     setIsRunning(false);
+    setBlockedLibraries([]);
     if (killTimerRef.current) clearTimeout(killTimerRef.current);
 
-    let bundled;
+    let result;
     try {
-      bundled = buildPreviewHtml(files);
+      result = buildRunnerPage(files, assignment?.allowedCdnDomains || []);
     } catch (err) {
       setRunError(err.message);
       return;
     }
 
-    const allowedCdnDomains = assignment?.allowedCdnDomains || [];
-    const harness    = buildSecurityHarness(allowedCdnDomains);
-    const finalSrcdoc = bundled.replace(/<\/head>/i, harness + '</head>');
+    const { page: finalSrcdoc, blocked } = result;
+    if (blocked.length > 0) setBlockedLibraries(blocked);
 
     // blank first → forces iframe to reload even if same content
     requestAnimationFrame(() => {
@@ -183,6 +183,21 @@ export function LiveRunner({ files, assignment, isVisible, onClose }) {
         <div className="shrink-0 px-4 py-2 bg-[#f85149]/10 border-b border-[#f85149]/30
                         text-xs text-[#f85149] font-mono">
           {runError}
+        </div>
+      )}
+
+      {/* ── Blocked libraries warning ─────────────────────────────────────── */}
+      {blockedLibraries.length > 0 && (
+        <div className="shrink-0 px-4 py-2 bg-[#f0a500]/10 border-b border-[#f0a500]/30 text-xs font-mono">
+          <div className="flex items-center gap-1.5 text-[#f0a500] font-semibold mb-1">
+            <span>⚠</span>
+            <span>Blocked Libraries ({blockedLibraries.length}) — not in allowedCdnDomains</span>
+          </div>
+          {blockedLibraries.map((lib, i) => (
+            <div key={i} className="text-[#f0a500]/80 pl-4 truncate">
+              🚫 {lib.type}: {lib.url}
+            </div>
+          ))}
         </div>
       )}
 

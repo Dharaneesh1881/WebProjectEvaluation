@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { CodeEditor } from '../components/CodeEditor.jsx';
+import { LiveRunner } from '../components/LiveRunner.jsx';
 import { MultiFileUpload } from '../components/MultiFileUpload.jsx';
 import { FileList } from '../components/FileList.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
@@ -463,10 +464,11 @@ function SubmissionsView({ assignment, onBack, onStudentClick }) {
   );
 }
 
-function StudentDetailView({ assignmentId, studentId, onBack }) {
+function StudentDetailView({ assignmentId, studentId, assignment, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showStudentRunner, setShowStudentRunner] = useState(false);
 
   useEffect(() => {
     getTeacherStudentSubmission(assignmentId, studentId)
@@ -513,9 +515,34 @@ function StudentDetailView({ assignmentId, studentId, onBack }) {
         <section className="flex min-h-[340px] min-w-0 flex-1 flex-col border-b xl:border-b-0 xl:border-r border-[var(--border-color)] bg-[var(--bg-surface)] xl:basis-[54%]">
           <div className="px-4 py-3 bg-[var(--bg-surface-alt)] border-b border-[var(--border-color)] flex justify-between items-center text-xs shrink-0">
             <span className="font-semibold text-[var(--text-strong)]">Submitted Code</span>
-            <span className="text-[var(--text-muted)] font-mono">Attempts: {data.attempts ?? 1}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[var(--text-muted)] font-mono">Attempts: {data.attempts ?? 1}</span>
+              <button
+                onClick={() => setShowStudentRunner(s => !s)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all
+                  ${showStudentRunner
+                    ? 'bg-[#f0a500]/15 border border-[#f0a500]/40 text-[#f0a500]'
+                    : 'bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+              >
+                {showStudentRunner ? '◼ Close' : '▶ Run'}
+              </button>
+            </div>
           </div>
-          <CodeEditor files={data.files} readOnly={true} />
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className={showStudentRunner ? 'flex-1 min-w-0' : 'flex-1'}>
+              <CodeEditor files={data.files} readOnly={true} />
+            </div>
+            {showStudentRunner && (
+              <div className="flex-1 min-w-[280px] border-l border-[var(--border-color)]">
+                <LiveRunner
+                  files={data.files}
+                  assignment={assignment}
+                  isVisible={showStudentRunner}
+                  onClose={() => setShowStudentRunner(false)}
+                />
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Right: Results Panel */}
@@ -556,6 +583,7 @@ export default function TeacherDashboard() {
   const [createResult, setCreateResult] = useState(null);
   const [createError, setCreateError] = useState('');
   const [createFilesMessage, setCreateFilesMessage] = useState(null);
+  const [showReferenceRunner, setShowReferenceRunner] = useState(false);
 
   useEffect(() => {
     if (view === 'list') {
@@ -717,6 +745,7 @@ export default function TeacherDashboard() {
               <StudentDetailView
                 assignmentId={selectedAssignmentId}
                 studentId={selectedStudentId}
+                assignment={selectedAssignment}
                 onBack={() => setView(historyView)}
               />
             </div>
@@ -862,9 +891,23 @@ export default function TeacherDashboard() {
                       </div>
 
                       <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 min-h-0 flex flex-col">
-                        <div className="mb-4">
-                          <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Reference code *</label>
-                          <p className="text-xs text-[var(--text-faint)]">Upload the reference project files. The backend will bundle them into one self-contained page before baseline capture and evaluation.</p>
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">Reference code *</label>
+                            <p className="text-xs text-[var(--text-faint)]">Upload the reference project files. The backend will bundle them into one self-contained page before baseline capture and evaluation.</p>
+                          </div>
+                          {files.some(f => f.type === 'html') && (
+                            <button
+                              type="button"
+                              onClick={() => setShowReferenceRunner(s => !s)}
+                              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
+                                ${showReferenceRunner
+                                  ? 'bg-[#f0a500]/15 border border-[#f0a500]/40 text-[#f0a500]'
+                                  : 'bg-[var(--bg-base)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-strong)]'}`}
+                            >
+                              {showReferenceRunner ? '◼ Close Preview' : '▶ Preview Reference'}
+                            </button>
+                          )}
                         </div>
                         <div className="space-y-4 flex-1 min-h-0 max-h-[70vh] overflow-y-auto scrollbar-thin pr-1">
                           <MultiFileUpload
@@ -896,13 +939,25 @@ export default function TeacherDashboard() {
                             }}
                             onSetMain={(fileName) => setFiles(setProjectMainFile(files, fileName))}
                           />
-                          <div className="min-h-[360px] flex-1 flex flex-col border border-[var(--border-color)] rounded-xl overflow-hidden">
-                            <CodeEditor
-                              files={files}
-                              selectedFileName={selectedFileName}
-                              onSelectFile={setSelectedFileName}
-                              onChange={(fileName, value) => setFiles(updateProjectFileContent(files, fileName, value))}
-                            />
+                          <div className="min-h-[360px] flex-1 flex border border-[var(--border-color)] rounded-xl overflow-hidden">
+                            <div className={showReferenceRunner ? 'flex-1 min-w-0' : 'flex-1'}>
+                              <CodeEditor
+                                files={files}
+                                selectedFileName={selectedFileName}
+                                onSelectFile={setSelectedFileName}
+                                onChange={(fileName, value) => setFiles(updateProjectFileContent(files, fileName, value))}
+                              />
+                            </div>
+                            {showReferenceRunner && (
+                              <div className="flex-1 min-w-[280px] border-l border-[var(--border-color)]">
+                                <LiveRunner
+                                  files={files}
+                                  assignment={null}
+                                  isVisible={showReferenceRunner}
+                                  onClose={() => setShowReferenceRunner(false)}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </section>
