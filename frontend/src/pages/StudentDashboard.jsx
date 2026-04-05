@@ -7,7 +7,7 @@ import { FileList } from '../components/FileList.jsx';
 import { ResultsPanel } from '../components/ResultsPanel.jsx';
 import { LiveRunner } from '../components/LiveRunner.jsx';
 import { GeminiChatbot } from '../components/GeminiChatbot.jsx';
-import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, getAssignmentPreview, socket } from '../api/index.js';
+import { getAssignments, submitCode, getResult, getStudentProgress, getBestCode, getStudentLeaderboard, getAssignmentPreview, getAssignmentLibraries, socket } from '../api/index.js';
 import { FiAward, FiFlag, FiTarget, FiZap, FiArrowLeft, FiList, FiBarChart2, FiLogOut, FiChevronRight, FiChevronLeft, FiCode, FiMenu, FiSun, FiMoon } from 'react-icons/fi';
 import { MdCheckCircle } from 'react-icons/md';
 import {
@@ -268,6 +268,8 @@ export default function StudentDashboard() {
   const [lightbox, setLightbox] = useState(null);         // lightbox URL
   const [showRunner, setShowRunner] = useState(false);    // live preview panel
   const [showTargetOutput, setShowTargetOutput] = useState(false); // target output panel
+  const [availableLibraries, setAvailableLibraries] = useState([]);
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState([]);
   const [targetHtml, setTargetHtml]             = useState('');
   const [targetLoading, setTargetLoading]       = useState(false);
 
@@ -312,6 +314,13 @@ export default function StudentDashboard() {
     setShowRunner(false);
     setShowTargetOutput(false);
     setTargetHtml('');
+    setAvailableLibraries([]);
+    setSelectedLibraryIds([]);
+
+    // Fetch allowed libraries for this assignment
+    getAssignmentLibraries(assignment._id)
+      .then(libs => setAvailableLibraries(Array.isArray(libs) ? libs : []))
+      .catch(() => {});
 
     // If the student has a previous best submission, load that code into the editor
     const p = progress[assignment._id];
@@ -365,7 +374,7 @@ export default function StudentDashboard() {
     setStatus('pending');
     setShowResults(false);
     try {
-      const { submissionId: id } = await submitCode({ files, assignmentId: selectedAssignment._id });
+      const { submissionId: id } = await submitCode({ files, assignmentId: selectedAssignment._id, selectedLibraryIds });
       setSubmissionId(id);
     } catch (err) {
       setSubmitError(err.message);
@@ -722,6 +731,39 @@ export default function StudentDashboard() {
                             </div>
                           ) : (
                             <p className="text-sm text-[var(--text-faintest)] italic">No description provided.</p>
+                          )}
+
+                          {/* ── Library Picker ── */}
+                          {availableLibraries.length > 0 && (
+                            <div className="mt-5 pt-4 border-t border-[var(--border-color)]">
+                              <p className="text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-wider mb-2">
+                                Available Libraries
+                              </p>
+                              <div className="flex flex-col gap-1.5">
+                                {availableLibraries.map(lib => (
+                                  <label
+                                    key={lib.id}
+                                    className="flex items-center gap-2 text-xs text-[var(--text-muted)] cursor-pointer select-none hover:text-[var(--text-strong)] transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="accent-[#4e9af1]"
+                                      checked={selectedLibraryIds.includes(lib.id)}
+                                      onChange={e => setSelectedLibraryIds(ids =>
+                                        e.target.checked
+                                          ? [...ids, lib.id]
+                                          : ids.filter(id => id !== lib.id)
+                                      )}
+                                    />
+                                    <span className="font-medium">{lib.name}</span>
+                                    <span className="text-[var(--text-faintest)]">v{lib.version}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="text-[10px] text-[var(--text-faintest)] mt-2">
+                                Selected libraries will be available when your code runs.
+                              </p>
+                            </div>
                           )}
                         </div>
                       </div>

@@ -38,16 +38,16 @@ router.get('/progress/:assignmentId', requireAuth, async (req, res) => {
     });
 });
 
-// GET /api/progress/:assignmentId/code — return the student's best submission code
+// GET /api/progress/:assignmentId/code — return the student's last submission code
 router.get('/progress/:assignmentId/code', requireAuth, async (req, res) => {
     const record = await StudentProgress.findOne({
         studentId: req.user.id,
         assignmentId: req.params.assignmentId
     });
-    if (!record?.bestSubmissionId) {
+    if (!record?.lastSubmissionId) {
         return res.json({ files: [] });
     }
-    const submission = await Submission.findOne({ submissionId: record.bestSubmissionId });
+    const submission = await Submission.findOne({ submissionId: record.lastSubmissionId });
     if (!submission) return res.json({ files: [] });
     return res.json({ files: normalizeStoredFiles(submission.files) });
 });
@@ -202,18 +202,18 @@ router.get('/student-leaderboard', requireAuth, async (req, res) => {
     return res.json(result);
 });
 
-// GET /api/teacher/student-submission/:assignmentId/:studentId — teacher-accessible: view specific student's best submission code and result
+// GET /api/teacher/student-submission/:assignmentId/:studentId — teacher-accessible: view specific student's last submission code and result
 router.get('/teacher/student-submission/:assignmentId/:studentId', requireAuth, requireRole('teacher'), async (req, res) => {
     const { assignmentId, studentId } = req.params;
 
     const progress = await StudentProgress.findOne({ assignmentId, studentId });
-    if (!progress || !progress.bestSubmissionId) {
+    if (!progress || !progress.lastSubmissionId) {
         return res.status(404).json({ error: 'No submission found for this student.' });
     }
 
     const [submission, evalRun, user] = await Promise.all([
-        Submission.findOne({ submissionId: progress.bestSubmissionId }),
-        EvaluationRun.findOne({ submissionId: progress.bestSubmissionId }),
+        Submission.findOne({ submissionId: progress.lastSubmissionId }),
+        EvaluationRun.findOne({ submissionId: progress.lastSubmissionId }),
         User.findById(studentId).select('name email')
     ]);
 

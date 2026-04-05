@@ -17,6 +17,7 @@ const submissionSchema = new mongoose.Schema({
     enum: ['pending', 'processing', 'done', 'error'],
     default: 'pending'
   },
+  selectedLibraryIds: { type: [String], default: [] },
   submittedAt: { type: Date, default: Date.now }
 });
 

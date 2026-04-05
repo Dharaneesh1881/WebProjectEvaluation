@@ -1,11 +1,15 @@
 import { io } from 'socket.io-client';
 
-export const socket = io('http://localhost:3001', {
+// In production, VITE_API_URL is the Render backend URL (e.g. https://webeval-api.onrender.com)
+// In development, leave it unset and the Vite proxy handles /api → localhost:3001
+const BACKEND_URL = import.meta.env.VITE_API_URL || '';
+
+export const socket = io(BACKEND_URL || 'http://localhost:3001', {
   autoConnect: true,
   transports: ['websocket', 'polling']
 });
 
-const API_BASE = '/api';
+const API_BASE = `${BACKEND_URL}/api`;
 
 function getToken() {
   return localStorage.getItem('token');
@@ -106,11 +110,18 @@ export async function getAssignmentSubmissions(assignmentId) {
 
 // ── Submissions ─────────────────────────────────────────────────────────────
 
-export async function submitCode({ files, assignmentId }) {
+export async function getAssignmentLibraries(assignmentId) {
+  const res = await fetch(`${API_BASE}/assignments/${assignmentId}/libraries`, {
+    headers: authHeaders()
+  });
+  return handleResponse(res);
+}
+
+export async function submitCode({ files, assignmentId, selectedLibraryIds = [] }) {
   const res = await fetch(`${API_BASE}/submissions`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ files, assignmentId })
+    body: JSON.stringify({ files, assignmentId, selectedLibraryIds })
   });
   return handleResponse(res);
 }

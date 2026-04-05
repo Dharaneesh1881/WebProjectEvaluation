@@ -11,7 +11,7 @@ const router = Router();
 
 // POST /api/submissions — student submits code for evaluation
 router.post('/submissions', requireAuth, async (req, res) => {
-  const { files: incomingFiles, assignmentId } = req.body;
+  const { files: incomingFiles, assignmentId, selectedLibraryIds = [] } = req.body;
 
   if (!assignmentId) return res.status(400).json({ error: 'assignmentId is required' });
 
@@ -35,7 +35,8 @@ router.post('/submissions', requireAuth, async (req, res) => {
     assignmentId,
     studentId: req.user.id,
     files: normalized.files,
-    status: 'pending'
+    status: 'pending',
+    selectedLibraryIds: Array.isArray(selectedLibraryIds) ? selectedLibraryIds : []
   });
 
   await evaluationQueue.add('evaluate', { submissionId, assignmentId }, {

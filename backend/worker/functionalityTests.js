@@ -28,9 +28,12 @@
 import { enableRequestWhitelist } from './networkPolicy.js';
 
 // ── Page setup for each test case (fresh isolated context) ────────────────
-async function createFreshPage(browser, fileUrl, allowedDomains = [], allowedUrlPrefixes = []) {
+async function createFreshPage(browser, fileUrl, allowedDomains = [], allowedUrlPrefixes = [], timeoutMs = 30000) {
   const context = await browser.createBrowserContext();
   const page    = await context.newPage();
+
+  page.setDefaultTimeout(timeoutMs);
+  page.setDefaultNavigationTimeout(timeoutMs);
 
   await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
 
@@ -49,7 +52,7 @@ async function createFreshPage(browser, fileUrl, allowedDomains = [], allowedUrl
     window.prompt  = msg => { window._dialogs.push({ type: 'prompt',  message: String(msg ?? '') }); return ''; };
   });
 
-  await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 8000 });
+  await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: timeoutMs });
   await new Promise(r => setTimeout(r, 300));
 
   return { context, page, capturedDialogs };
@@ -235,7 +238,7 @@ async function runAssertion(page, assert, savedValues) {
 }
 
 // ── Main: run all test cases ───────────────────────────────────────────────
-export async function runFunctionalityTests(browser, fileUrl, testCases, allowedDomains = [], allowedUrlPrefixes = []) {
+export async function runFunctionalityTests(browser, fileUrl, testCases, allowedDomains = [], allowedUrlPrefixes = [], timeoutMs = 30000) {
   // If no tests defined, return 0 earned / 40 max
   if (!testCases || testCases.length === 0) {
     return { tests: [], earned: 0, score: 0, maxScore: 40, rawMax: 0 };
@@ -261,7 +264,7 @@ export async function runFunctionalityTests(browser, fileUrl, testCases, allowed
     let page    = null;
 
     try {
-      ({ context, page } = await createFreshPage(browser, fileUrl, allowedDomains, allowedUrlPrefixes));
+      ({ context, page } = await createFreshPage(browser, fileUrl, allowedDomains, allowedUrlPrefixes, timeoutMs));
       const savedValues = {};
 
       // Execute steps one by one; continue even if a step fails

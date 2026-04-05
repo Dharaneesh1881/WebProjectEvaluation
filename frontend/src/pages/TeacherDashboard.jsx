@@ -574,7 +574,7 @@ export default function TeacherDashboard() {
   const [deletingId, setDeletingId] = useState(null);
 
   // Create form state
-  const [form, setForm] = useState({ title: '', description: '' });
+  const [form, setForm] = useState({ title: '', description: '', timeoutMs: 30000, viewports: ['desktop'] });
   const [files, setFiles] = useState([]);
   const [selectedFileName, setSelectedFileName] = useState(null);
   const [testsJson, setTestsJson] = useState('');
@@ -632,7 +632,14 @@ export default function TeacherDashboard() {
     setCreateError('');
     setCreating(true);
     try {
-      const result = await createAssignment({ ...form, files, functionalityTests, interactionTests });
+      const result = await createAssignment({
+        ...form,
+        files,
+        functionalityTests,
+        interactionTests,
+        viewports: form.viewports,
+        timeoutMs: form.timeoutMs
+      });
       setCreateResult(result);
     } catch (err) {
       setCreateError(err.message);
@@ -680,7 +687,7 @@ export default function TeacherDashboard() {
                 if (item.id === 'create') {
                   setView('create');
                   setCreateResult(null); setCreateError('');
-                  setForm({ title: '', description: '' });
+                  setForm({ title: '', description: '', timeoutMs: 30000, viewports: ['desktop'] });
                   setFiles([]);
                   setSelectedFileName(null);
                   setTestsJson(''); setTestsJsonError('');
@@ -863,6 +870,52 @@ export default function TeacherDashboard() {
                                 rows={12}
                                 className="w-full px-3 py-3 bg-[var(--bg-base)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] placeholder:text-[var(--border-light)] focus:outline-none focus:border-[#4e9af1] resize-y leading-relaxed"
                                 placeholder={"Describe what students need to build.\n\nExample:\n1. Overview — what the app does\n2. Requirements — specific features expected\n3. Examples — any input/output examples\n4. Notes — constraints or hints"}
+                              />
+                            </div>
+
+                            {/* Visual Test Viewports */}
+                            <div>
+                              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-2">
+                                Visual Test Viewports
+                                <span className="ml-1 text-[var(--text-faintest)] font-normal">— which screen sizes to compare</span>
+                              </label>
+                              <div className="flex gap-4">
+                                {[
+                                  { id: 'desktop', label: 'Desktop (1280×720)' },
+                                  { id: 'mobile',  label: 'Mobile (390×844)' }
+                                ].map(({ id, label }) => (
+                                  <label key={id} className="flex items-center gap-2 text-xs text-[var(--text-muted)] cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={(form.viewports ?? ['desktop']).includes(id)}
+                                      onChange={e => setForm(f => ({
+                                        ...f,
+                                        viewports: e.target.checked
+                                          ? [...(f.viewports ?? ['desktop']), id]
+                                          : (f.viewports ?? ['desktop']).filter(v => v !== id)
+                                      }))}
+                                      className="accent-[#4e9af1]"
+                                    />
+                                    {label}
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Evaluation Timeout */}
+                            <div>
+                              <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+                                Evaluation timeout per test (ms)
+                                <span className="ml-1 text-[var(--text-faintest)] font-normal">— default 30 000</span>
+                              </label>
+                              <input
+                                type="number"
+                                min={5000}
+                                max={120000}
+                                step={1000}
+                                value={form.timeoutMs ?? 30000}
+                                onChange={e => setForm(f => ({ ...f, timeoutMs: Number(e.target.value) }))}
+                                className="w-40 px-3 py-2 bg-[var(--bg-base)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-strong)] focus:outline-none focus:border-[#4e9af1]"
                               />
                             </div>
                           </div>

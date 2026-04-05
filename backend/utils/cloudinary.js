@@ -68,4 +68,16 @@ export async function downloadImageAsBuffer(url) {
   return Buffer.from(arrayBuffer);
 }
 
+export async function uploadRawText(text, folder, publicId) {
+  assertCloudinaryConfig();
+  const buffer = Buffer.from(text, 'utf8');
+  const result = await uploadBufferToCloudinary(buffer, {
+    folder,
+    publicId,
+    resourceType: 'raw',
+    overwrite: true
+  });
+  return result.secure_url;
+}
+
 export { cloudinary };

@@ -414,7 +414,38 @@ function SubmissionsView() {
                             </section>
                             <section className="flex-1 overflow-y-auto p-4 bg-[#0d0d1a]">
                                 {detail.evalRun ? (
-                                    <ResultsPanel status="done" result={detail.evalRun} />
+                                    <>
+                                        <ResultsPanel status="done" result={detail.evalRun} />
+                                        {detail.evalRun?.breakdown?.timing && (
+                                            <div className="mt-4 rounded-xl border border-[#1e1e30] overflow-hidden">
+                                                <div className="px-4 py-2 border-b border-[#1e1e30] text-[10px] text-[#555] font-semibold uppercase tracking-wider">
+                                                    Evaluation Timing
+                                                </div>
+                                                <table className="w-full text-xs">
+                                                    <tbody>
+                                                        {['linter', 'lighthouse', 'functionality', 'interaction', 'visual'].map(k => (
+                                                            <tr key={k} className="border-b border-[#0d0d1a]">
+                                                                <td className="px-4 py-2 text-[#666] capitalize">{k}</td>
+                                                                <td className="px-4 py-2 text-right font-mono text-[#888]">
+                                                                    {detail.evalRun.breakdown.timing[k] != null
+                                                                        ? `${detail.evalRun.breakdown.timing[k]} ms`
+                                                                        : '—'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        <tr className="border-t border-[#1e1e30]">
+                                                            <td className="px-4 py-2 text-white font-bold">Total</td>
+                                                            <td className="px-4 py-2 text-right font-mono font-bold text-white">
+                                                                {detail.evalRun.breakdown.timing.total != null
+                                                                    ? `${detail.evalRun.breakdown.timing.total} ms`
+                                                                    : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="text-center py-16 text-[#555]">
                                         <FiClock size={32} className="mx-auto mb-3 text-[#333]" />

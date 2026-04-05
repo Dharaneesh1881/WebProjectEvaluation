@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import puppeteer from 'puppeteer';
-import fs from 'fs-extra';
 import { adminLogin, requireAdmin } from '../middleware/adminAuth.js';
 import Assignment from '../models/Assignment.js';
 import StudentProgress from '../models/StudentProgress.js';
@@ -10,17 +8,10 @@ import User from '../models/User.js';
 import LibraryPolicy from '../models/LibraryPolicy.js';
 import { buildPage } from '../worker/pageBuilder.js';
 import {
-  enableRequestWhitelist,
   normalizeAllowedDomains,
   resolveAllowedDomains
 } from '../worker/networkPolicy.js';
-import { uploadScreenshot } from '../utils/cloudinary.js';
-import {
-  SCREENSHOT_VIEWPORT,
-  captureViewportScreenshot,
-  getPageCaptureTargets,
-  preparePageForScreenshot
-} from '../worker/screenshotCapture.js';
+import { captureBaseline } from '../worker/baselineCapture.js';
 
 const router = Router();
 
@@ -254,11 +245,13 @@ router.post('/admin/submissions/:submissionId/replay', requireAdmin, async (req,
     // Re-queue via the same BullMQ queue
     const IORedis = (await import('ioredis')).default;
     const { Queue } = await import('bullmq');
-    const connection = new IORedis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-        maxRetriesPerRequest: null
-    });
+    const connection = process.env.REDIS_URL
+        ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+        : new IORedis({
+            host: process.env.REDIS_HOST || 'localhost',
+            port: parseInt(process.env.REDIS_PORT) || 6379,
+            maxRetriesPerRequest: null
+          });
     const evalQueue = new Queue('eval', { connection });
     await evalQueue.add('evaluate', {
         submissionId: submission.submissionId,
@@ -394,50 +387,21 @@ router.post('/admin/assignments/:id/regenerate-baseline', requireAdmin, async (r
         : [];
     const allowedUrlPrefixes = activePolicies.flatMap(p => p.cdnUrls || []);
 
-    let browser = null;
-    const referenceScreenshots = [];
-    const referencePageScreenshots = [];
-    let referenceScreenshotUrl = null;
-
     try {
         const { pageFilePaths, bundle } = await buildPage(`baseline-${assignment._id}`, assignment.files);
+        const viewportNames = assignment.evalSpec?.viewports?.length > 0
+            ? assignment.evalSpec.viewports
+            : ['desktop'];
 
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-        });
-        const page = await browser.newPage();
-        await page.setViewport(SCREENSHOT_VIEWPORT);
-        await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
-
-        for (const bundledPage of bundle.pages) {
-            const pagePath = pageFilePaths[bundledPage.name];
-            await preparePageForScreenshot(page, `file://${pagePath}`, 10000);
-            const captureTargets = await getPageCaptureTargets(page);
-            const safePageName = bundledPage.name.replace(/[^\w.-]+/g, '_');
-
-            for (let i = 0; i < captureTargets.length; i++) {
-                const capture = captureTargets[i];
-                const buffer = await captureViewportScreenshot(page, capture.scrollY, 'png');
-                const url = await uploadScreenshot(
-                    buffer,
-                    `assignments/${assignment._id}`,
-                    `reference_${safePageName}_${capture.key}`
-                );
-
-                referencePageScreenshots.push({
-                    pageName: bundledPage.name,
-                    url,
-                    captureKey: capture.key,
-                    captureLabel: capture.label,
-                    scrollY: capture.scrollY,
-                    isMain: bundledPage.isMain && i === 0
-                });
-                referenceScreenshots.push(url);
-
-                if (bundledPage.isMain && i === 0) referenceScreenshotUrl = url;
-            }
-        }
+        const { referenceScreenshotUrl, referenceScreenshots, referencePageScreenshots } =
+            await captureBaseline({
+                bundle,
+                pageFilePaths,
+                assignmentId: assignment._id,
+                viewportNames,
+                allowedDomains,
+                allowedUrlPrefixes
+            });
 
         await Assignment.findByIdAndUpdate(assignment._id, {
             referenceScreenshotUrl,
@@ -455,9 +419,6 @@ router.post('/admin/assignments/:id/regenerate-baseline', requireAdmin, async (r
     } catch (err) {
         console.error('Baseline regeneration failed:', err.message);
         return res.status(500).json({ error: 'Baseline regeneration failed: ' + err.message });
-    } finally {
-        if (browser) await browser.close();
-        await fs.remove(`/tmp/eval-baseline-${assignment._id}`).catch(() => {});
     }
 });
 

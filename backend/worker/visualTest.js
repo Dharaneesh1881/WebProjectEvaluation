@@ -3,34 +3,66 @@ import pixelmatch from 'pixelmatch';
 import { uploadScreenshot, downloadImageAsBuffer } from '../utils/cloudinary.js';
 import { enableRequestWhitelist } from './networkPolicy.js';
 import {
-  SCREENSHOT_VIEWPORT,
+  VIEWPORTS,
   captureViewportScreenshot,
   formatCaptureName,
   preparePageForScreenshot
 } from './screenshotCapture.js';
 
-// ── Convert PNG to grayscale in-place ──────────────────────────────────────
-// Removes color differences so layout/structure dominates the comparison.
-function toGrayscale(png) {
-  for (let i = 0; i < png.data.length; i += 4) {
-    const r    = png.data[i];
-    const g    = png.data[i + 1];
-    const b    = png.data[i + 2];
-    // Human-eye weighted formula (ITU-R BT.601)
-    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-    png.data[i]     = gray;
-    png.data[i + 1] = gray;
-    png.data[i + 2] = gray;
-    // alpha channel (i+3) left unchanged
+// ── Nearest-neighbour resize (no extra deps — uses pngjs only) ─────────────
+function resizePNG(src, targetW, targetH) {
+  const dst = new PNG({ width: targetW, height: targetH });
+  const scaleX = src.width / targetW;
+  const scaleY = src.height / targetH;
+  for (let y = 0; y < targetH; y++) {
+    for (let x = 0; x < targetW; x++) {
+      const sx = Math.min(Math.floor(x * scaleX), src.width - 1);
+      const sy = Math.min(Math.floor(y * scaleY), src.height - 1);
+      const si = (sy * src.width + sx) * 4;
+      const di = (y * targetW + x) * 4;
+      dst.data[di]     = src.data[si];
+      dst.data[di + 1] = src.data[si + 1];
+      dst.data[di + 2] = src.data[si + 2];
+      dst.data[di + 3] = src.data[si + 3];
+    }
   }
+  return dst;
 }
 
-async function setupPage(browser, allowedDomains = [], allowedUrlPrefixes = []) {
+// ── Dual-metric diff: 70% layout (pixelmatch) + 30% color accuracy ─────────
+function computeDiff(img1, img2) {
+  const { width, height } = img1;
+  const diff = new PNG({ width, height });
+
+  const numMismatched = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.1 });
+  const totalPixels = width * height;
+
+  // Layout diff: pixel-level mismatch ratio
+  const layoutDiffPct = Math.round((numMismatched / totalPixels) * 10000) / 100;
+
+  // Color accuracy: per-channel average absolute difference (0–100 scale)
+  let colorSum = 0;
+  for (let i = 0; i < img1.data.length; i += 4) {
+    colorSum += (
+      Math.abs(img1.data[i]     - img2.data[i])   +   // R
+      Math.abs(img1.data[i + 1] - img2.data[i + 1]) + // G
+      Math.abs(img1.data[i + 2] - img2.data[i + 2])   // B
+    ) / (3 * 255);
+  }
+  const colorDiffPct = parseFloat(((colorSum / totalPixels) * 100).toFixed(2));
+
+  // Combined: 70% layout + 30% color
+  const diffPercent = parseFloat((0.7 * layoutDiffPct + 0.3 * colorDiffPct).toFixed(2));
+  const diffScore   = Math.max(0, 100 - diffPercent);
+
+  return { diff, diffPercent, diffScore, layoutDiffPct, colorDiffPct };
+}
+
+async function setupPage(browser, viewportName = 'desktop', allowedDomains = [], allowedUrlPrefixes = []) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
-
   await enableRequestWhitelist(page, allowedDomains, allowedUrlPrefixes);
-  await page.setViewport(SCREENSHOT_VIEWPORT);
+  await page.setViewport(VIEWPORTS[viewportName] ?? VIEWPORTS.desktop);
   return { context, page };
 }
 
@@ -61,161 +93,168 @@ export async function runVisualTest(browser, {
     return noBaseline;
   }
 
-  const { context, page } = await setupPage(browser, allowedDomains, allowedUrlPrefixes);
+  // ── Group reference pages by viewport ───────────────────────────────────
+  const byViewport = {};
+  for (const ref of referencePages) {
+    const vp = ref.viewport ?? 'desktop';
+    (byViewport[vp] ??= []).push(ref);
+  }
+
   const results = [];
   const studentPageNames = Object.keys(pageFilePaths || {});
-  const expectedPageNames = new Set(referencePages.map((pageRef) => pageRef.pageName));
+  const expectedPageNames = new Set(referencePages.map(r => r.pageName));
 
-  try {
-    for (const referencePage of referencePages) {
-      const displayName = formatCaptureName(referencePage.pageName, referencePage.captureLabel);
-      const localPagePath = pageFilePaths?.[referencePage.pageName];
-      let screenshotBuffer = null;
-      let studentScreenshotUrl = null;
+  // ── Process each viewport group with its own Puppeteer page ─────────────
+  for (const [vp, vpPages] of Object.entries(byViewport)) {
+    const { context, page } = await setupPage(browser, vp, allowedDomains, allowedUrlPrefixes);
 
-      if (localPagePath) {
-        screenshotBuffer = await capturePageScreenshot(
-          page,
-          `file://${localPagePath}`,
-          referencePage.scrollY ?? 0
-        );
+    try {
+      for (const referencePage of vpPages) {
+        const displayName = formatCaptureName(referencePage.pageName, referencePage.captureLabel);
+        const localPagePath = pageFilePaths?.[referencePage.pageName];
+        let screenshotBuffer = null;
+        let studentScreenshotUrl = null;
 
+        if (localPagePath) {
+          screenshotBuffer = await capturePageScreenshot(
+            page,
+            `file://${localPagePath}`,
+            referencePage.scrollY ?? 0
+          );
+
+          try {
+            studentScreenshotUrl = await uploadScreenshot(
+              Buffer.from(screenshotBuffer),
+              `submissions/${assignmentId}`,
+              `student_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}_${vp}`
+            );
+          } catch (err) {
+            console.error('Failed to upload student screenshot:', err.message);
+          }
+        }
+
+        if (!localPagePath) {
+          results.push({
+            pageName: displayName,
+            sourcePageName: referencePage.pageName,
+            viewport: vp,
+            diffPercent: 100,
+            diffScore: 0,
+            studentScreenshotUrl: null,
+            referenceScreenshotUrl: referencePage.url,
+            diffImageUrl: null,
+            error: 'Student page not found'
+          });
+          continue;
+        }
+
+        let referenceBuffer;
         try {
+          referenceBuffer = await downloadImageAsBuffer(referencePage.url);
+        } catch (err) {
+          console.error('Failed to download reference screenshot:', err.message);
+          results.push({
+            pageName: displayName,
+            sourcePageName: referencePage.pageName,
+            viewport: vp,
+            diffPercent: 100,
+            diffScore: 0,
+            studentScreenshotUrl,
+            referenceScreenshotUrl: referencePage.url,
+            diffImageUrl: null,
+            error: 'Reference screenshot download failed'
+          });
+          continue;
+        }
+
+        let img1 = PNG.sync.read(referenceBuffer);
+        let img2 = PNG.sync.read(Buffer.from(screenshotBuffer));
+
+        // Resize student screenshot to match reference dimensions instead of failing
+        if (img1.width !== img2.width || img1.height !== img2.height) {
+          console.warn(`Screenshot dimension mismatch for ${displayName} [${vp}] — resizing student image`);
+          img2 = resizePNG(img2, img1.width, img1.height);
+        }
+
+        const { diff, diffPercent, diffScore, layoutDiffPct, colorDiffPct } = computeDiff(img1, img2);
+
+        let diffImageUrl = null;
+        try {
+          const diffBuffer = PNG.sync.write(diff);
+          diffImageUrl = await uploadScreenshot(
+            diffBuffer,
+            `submissions/${assignmentId}`,
+            `diff_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}_${vp}`
+          );
+        } catch (err) {
+          console.error('Failed to upload diff image:', err.message);
+        }
+
+        results.push({
+          pageName: displayName,
+          sourcePageName: referencePage.pageName,
+          viewport: vp,
+          diffPercent,
+          diffScore,
+          layoutDiffPct,
+          colorDiffPct,
+          studentScreenshotUrl,
+          referenceScreenshotUrl: referencePage.url,
+          diffImageUrl
+        });
+      }
+    } finally {
+      await context.close();
+    }
+  }
+
+  // ── Capture unexpected student pages (desktop context) ──────────────────
+  const unexpectedPages = studentPageNames.filter(n => !expectedPageNames.has(n));
+  if (unexpectedPages.length > 0) {
+    const { context, page } = await setupPage(browser, 'desktop', allowedDomains, allowedUrlPrefixes);
+    try {
+      for (const pageName of unexpectedPages) {
+        let studentScreenshotUrl = null;
+        try {
+          const screenshotBuffer = await capturePageScreenshot(page, `file://${pageFilePaths[pageName]}`, 0);
           studentScreenshotUrl = await uploadScreenshot(
             Buffer.from(screenshotBuffer),
             `submissions/${assignmentId}`,
-            `student_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}`
+            `student_${submissionId}_${pageName.replace(/[^\w.-]+/g, '_')}_unexpected`
           );
         } catch (err) {
-          console.error('Failed to upload student screenshot:', err.message);
+          console.error('Failed to capture extra student page screenshot:', err.message);
         }
-      }
 
-      if (!localPagePath) {
         results.push({
-          pageName: displayName,
-          sourcePageName: referencePage.pageName,
-          diffPercent: 100,
-          diffScore: 0,
-          studentScreenshotUrl: null,
-          referenceScreenshotUrl: referencePage.url,
-          diffImageUrl: null,
-          error: 'Student page not found'
-        });
-        continue;
-      }
-
-      let referenceBuffer;
-      try {
-        referenceBuffer = await downloadImageAsBuffer(referencePage.url);
-      } catch (err) {
-        console.error('Failed to download reference screenshot:', err.message);
-        results.push({
-          pageName: displayName,
-          sourcePageName: referencePage.pageName,
+          pageName,
+          sourcePageName: pageName,
+          viewport: 'desktop',
           diffPercent: 100,
           diffScore: 0,
           studentScreenshotUrl,
-          referenceScreenshotUrl: referencePage.url,
+          referenceScreenshotUrl: null,
           diffImageUrl: null,
-          error: 'Reference screenshot download failed'
+          error: 'Unexpected extra student page'
         });
-        continue;
       }
-
-      const img1 = PNG.sync.read(referenceBuffer);
-      const img2 = PNG.sync.read(Buffer.from(screenshotBuffer));
-
-      if (img1.width !== img2.width || img1.height !== img2.height) {
-        console.warn('Screenshot dimension mismatch — visual test returns 0');
-        results.push({
-          pageName: displayName,
-          sourcePageName: referencePage.pageName,
-          diffPercent: 100,
-          diffScore: 0,
-          studentScreenshotUrl,
-          referenceScreenshotUrl: referencePage.url,
-          diffImageUrl: null,
-          error: 'Screenshot dimension mismatch'
-        });
-        continue;
-      }
-
-      toGrayscale(img1);
-      toGrayscale(img2);
-
-      const { width, height } = img1;
-      const diff = new PNG({ width, height });
-      const numMismatchedPixels = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: 0.15 });
-
-      const totalPixels = width * height;
-      const diffPercent = Math.round((numMismatchedPixels / totalPixels) * 10000) / 100;
-      const diffScore = Math.max(0, 100 - diffPercent);
-
-      let diffImageUrl = null;
-      try {
-        const diffBuffer = PNG.sync.write(diff);
-        diffImageUrl = await uploadScreenshot(
-          diffBuffer,
-          `submissions/${assignmentId}`,
-          `diff_${submissionId}_${referencePage.pageName.replace(/[^\w.-]+/g, '_')}_${referencePage.captureKey || 'full'}`
-        );
-      } catch (err) {
-        console.error('Failed to upload diff image:', err.message);
-      }
-
-      results.push({
-        pageName: displayName,
-        sourcePageName: referencePage.pageName,
-        diffPercent,
-        diffScore,
-        studentScreenshotUrl,
-        referenceScreenshotUrl: referencePage.url,
-        diffImageUrl
-      });
+    } finally {
+      await context.close();
     }
-
-    for (const pageName of studentPageNames) {
-      if (expectedPageNames.has(pageName)) continue;
-
-      let studentScreenshotUrl = null;
-      try {
-        const screenshotBuffer = await capturePageScreenshot(page, `file://${pageFilePaths[pageName]}`, 0);
-        studentScreenshotUrl = await uploadScreenshot(
-          Buffer.from(screenshotBuffer),
-          `submissions/${assignmentId}`,
-          `student_${submissionId}_${pageName.replace(/[^\w.-]+/g, '_')}_unexpected`
-        );
-      } catch (err) {
-        console.error('Failed to capture extra student page screenshot:', err.message);
-      }
-
-      results.push({
-        pageName: pageName,
-        sourcePageName: pageName,
-        diffPercent: 100,
-        diffScore: 0,
-        studentScreenshotUrl,
-        referenceScreenshotUrl: null,
-        diffImageUrl: null,
-        error: 'Unexpected extra student page'
-      });
-    }
-  } finally {
-    await context.close();
   }
 
   if (results.length === 0) return noBaseline;
 
-  const mainResult = results.find((result) =>
-    referencePages.find((pageRef) => pageRef.pageName === result.sourcePageName && pageRef.isMain)
+  // ── Find main result for legacy top-level URL fields ────────────────────
+  const mainResult = results.find(result =>
+    referencePages.find(pageRef => pageRef.pageName === result.sourcePageName && pageRef.isMain)
   ) || results[0];
 
   const avgDiffPercent = parseFloat(
-    (results.reduce((sum, result) => sum + (result.diffPercent ?? 100), 0) / results.length).toFixed(2)
+    (results.reduce((sum, r) => sum + (r.diffPercent ?? 100), 0) / results.length).toFixed(2)
   );
   const avgDiffScore = parseFloat(
-    (results.reduce((sum, result) => sum + (result.diffScore ?? 0), 0) / results.length).toFixed(2)
+    (results.reduce((sum, r) => sum + (r.diffScore ?? 0), 0) / results.length).toFixed(2)
   );
 
   return {

@@ -24,18 +24,22 @@ import { buildPage, cleanupPage } from './pageBuilder.js';
 import { runLinters } from './linterRunner.js';
 import { runFunctionalityTests } from './functionalityTests.js';
 import { runInteractionTests } from './tests/interactionTests.js';
+import { runAlignCenterTests } from './tests/styleTests.js';
 import { runVisualTest } from './visualTest.js';
 import { runLighthouse } from './lighthouseRunner.js';
 import { resolveAllowedDomains } from './networkPolicy.js';
 import { calculateScore } from './scoreCalculator.js';
 import { getMainFile, mergeFilesByType, normalizeStoredFiles } from '../utils/projectFiles.js';
 import LibraryPolicy from '../models/LibraryPolicy.js';
+import { uploadRawText } from '../utils/cloudinary.js';
 
-const redisPub = new IORedis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT) || 6379,
-  maxRetriesPerRequest: null
-});
+const redisPub = process.env.REDIS_URL
+  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+  : new IORedis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+      maxRetriesPerRequest: null
+    });
 
 function resolveReferencePages(assignment) {
   const pageScreenshots = Array.isArray(assignment.referencePageScreenshots)
@@ -78,7 +82,13 @@ export async function runEvaluation(submissionId, assignmentId) {
   const activePolicies = policyIds.length > 0
     ? await LibraryPolicy.find({ _id: { $in: policyIds }, enabled: true })
     : [];
-  const allowedUrlPrefixes = activePolicies.flatMap(p => p.cdnUrls || []);
+
+  // If student selected specific libraries, restrict to those; otherwise allow all active
+  const studentSelectedIds = submission.selectedLibraryIds ?? [];
+  const effectivePolicies = studentSelectedIds.length > 0
+    ? activePolicies.filter(p => studentSelectedIds.includes(p._id.toString()))
+    : activePolicies;
+  const allowedUrlPrefixes = effectivePolicies.flatMap(p => p.cdnUrls || []);
 
   // ── 1. Build temp file ─────────────────────────────────────────────────
   const { filePath, dir, pageFilePaths } = await buildPage(submissionId, files);
@@ -89,16 +99,23 @@ export async function runEvaluation(submissionId, assignmentId) {
   let interactionResults = [];
   let visualResult = null;
   let performanceResult = null;
+  let domSnapshotUrl = null;
+  const timing = { linter: null, lighthouse: null, functionality: null, interaction: null, visual: null, total: null };
+  const tTotal = Date.now();
 
   try {
     // ── 2. Linters (no browser needed) ──────────────────────────────────
     console.log(`[${submissionId}] Running linters...`);
+    const tLinter = Date.now();
     linterResult = await runLinters(mainHtml?.content || '', mergedCss, mergedJs);
+    timing.linter = Date.now() - tLinter;
     console.log(`[${submissionId}] Linter score: ${linterResult.score}/10`);
 
     // ── 3. Lighthouse (needs its own browser) ────────────────────────────
     console.log(`[${submissionId}] Running Lighthouse...`);
+    const tLighthouse = Date.now();
     performanceResult = await runLighthouse(filePath);
+    timing.lighthouse = Date.now() - tLighthouse;
     console.log(`[${submissionId}] Performance score: ${performanceResult.score}/15`);
 
     // ── 4. Launch main Puppeteer browser ─────────────────────────────────
@@ -111,18 +128,34 @@ export async function runEvaluation(submissionId, assignmentId) {
       // ── 5. Functionality tests (40 marks) ──────────────────────────────
       const fnTests = spec.functionalityTests ?? [];
       console.log(`[${submissionId}] Functionality tests (${fnTests.length} cases)...`);
-      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests, allowedDomains, allowedUrlPrefixes);
+      const tFn = Date.now();
+      functionalityResult = await runFunctionalityTests(browser, fileUrl, fnTests, allowedDomains, allowedUrlPrefixes, spec.timeoutMs ?? 30000);
+      timing.functionality = Date.now() - tFn;
       console.log(`[${submissionId}] Functionality score: ${functionalityResult.score}/40`);
+
+      // ── 5b. alignCenterApprox style tests (folded into functionality bucket) ─
+      const alignTests = (spec.styleTests ?? []).filter(t => t.type === 'alignCenterApprox');
+      if (alignTests.length > 0) {
+        const alignResults = await runAlignCenterTests(browser, fileUrl, alignTests, allowedDomains);
+        functionalityResult.tests.push(...alignResults);
+        const extraEarned = alignResults.reduce((s, r) => s + (r.earned ?? 0), 0);
+        const extraMax = alignResults.reduce((s, r) => s + (r.weight ?? 0), 0);
+        functionalityResult.earned = (functionalityResult.earned ?? 0) + extraEarned;
+        functionalityResult.rawMax = (functionalityResult.rawMax ?? 0) + extraMax;
+      }
 
       // ── 6. Interaction tests (15 marks) ────────────────────────────────
       const intTests = spec.interactionTests ?? [];
+      const tInt = Date.now();
       if (intTests.length > 0) {
         console.log(`[${submissionId}] Interaction tests (${intTests.length} tests)...`);
         interactionResults = await runInteractionTests(browser, fileUrl, intTests, allowedDomains, allowedUrlPrefixes);
       }
+      timing.interaction = Date.now() - tInt;
 
-      // ── 7. Visual test (20 marks — grayscale pixelmatch) ────────────────
+      // ── 7. Visual test (20 marks — color pixelmatch, multi-viewport) ────
       console.log(`[${submissionId}] Visual test...`);
+      const tVis = Date.now();
       visualResult = await runVisualTest(
         browser,
         {
@@ -134,6 +167,24 @@ export async function runEvaluation(submissionId, assignmentId) {
           allowedUrlPrefixes
         }
       );
+      timing.visual = Date.now() - tVis;
+
+      // ── 7b. DOM snapshot (optional — only if captureDomSnapshot is set) ──
+      if (spec.captureDomSnapshot) {
+        try {
+          const snapPage = await browser.newPage();
+          await snapPage.goto(fileUrl, { waitUntil: 'networkidle0', timeout: spec.timeoutMs ?? 30000 });
+          const domHtml = await snapPage.content();
+          await snapPage.close();
+          domSnapshotUrl = await uploadRawText(
+            domHtml,
+            `submissions/${assignmentId}`,
+            `dom_${submissionId}`
+          );
+        } catch (err) {
+          console.warn(`[${submissionId}] DOM snapshot failed:`, err.message);
+        }
+      }
     } finally {
       await browser.close();
     }
@@ -141,6 +192,7 @@ export async function runEvaluation(submissionId, assignmentId) {
   } finally {
     await cleanupPage(dir);
   }
+  timing.total = Date.now() - tTotal;
 
   // ── 8. Calculate final score ───────────────────────────────────────────
   const breakdown = calculateScore({
@@ -153,7 +205,7 @@ export async function runEvaluation(submissionId, assignmentId) {
 
   console.log(`[${submissionId}] Final score: ${breakdown.totalScore}/100`);
 
-  // ── 9. Look up existing best score for this student+assignment ────────────
+  // ── 9. Look up existing progress for this student+assignment ─────────────
   const studentId = submission.studentId;
   const existing = await StudentProgress.findOne({ studentId, assignmentId });
   const prevBest = existing?.bestScore ?? -1;
@@ -167,12 +219,14 @@ export async function runEvaluation(submissionId, assignmentId) {
     submissionId,
     completedAt: new Date(),
     totalScore: newScore,
+    domSnapshotUrl,
     breakdown: {
       linter: breakdown.linter,
       functionality: breakdown.functionality,
       interaction: breakdown.interaction,
       visual: breakdown.visual,
-      performance: breakdown.performance
+      performance: breakdown.performance,
+      timing
     }
   });
 
@@ -180,12 +234,15 @@ export async function runEvaluation(submissionId, assignmentId) {
   const now = new Date();
   const progressUpdate = {
     $inc: { attempts: 1 },
-    $set: { updatedAt: now }
+    $set: {
+      updatedAt: now,
+      lastSubmissionId: submissionId,
+      lastScore: newScore
+    }
   };
 
   if (isBetter) {
     progressUpdate.$set.bestScore = newScore;
-    progressUpdate.$set.bestSubmissionId = submissionId;
     if (newScore >= 50 && !existing?.completed) {
       progressUpdate.$set.completed = true;
       progressUpdate.$set.completedAt = now;
@@ -202,26 +259,17 @@ export async function runEvaluation(submissionId, assignmentId) {
   // ── 11. Notify via Redis → Socket.IO ──────────────────────────────
   await redisPub.publish('eval:done', JSON.stringify({ submissionId }));
 
-  // ── 12. Cleanup — keep only ONE submission record per student per assignment ──
-  // We wait 30 s so the student has time to fetch their result before we delete.
+  // ── 12. Cleanup — keep only the LAST submission record per student per assignment ──
+  // We wait 30 s so the student has time to fetch their result before we delete the old one.
   setTimeout(async () => {
     try {
-      if (isBetter) {
-        // New submission is the new best — delete the OLD best's documents
-        if (existing?.bestSubmissionId && existing.bestSubmissionId !== submissionId) {
-          await Promise.all([
-            EvaluationRun.deleteOne({ submissionId: existing.bestSubmissionId }),
-            Submission.deleteOne({ submissionId: existing.bestSubmissionId })
-          ]);
-          console.log(`[cleanup] Deleted old best submission ${existing.bestSubmissionId} (superseded by ${submissionId})`);
-        }
-      } else {
-        // New submission is NOT better — delete THIS submission's documents, old best stays
+      const prevLastId = existing?.lastSubmissionId;
+      if (prevLastId && prevLastId !== submissionId) {
         await Promise.all([
-          EvaluationRun.deleteOne({ submissionId }),
-          Submission.deleteOne({ submissionId })
+          EvaluationRun.deleteOne({ submissionId: prevLastId }),
+          Submission.deleteOne({ submissionId: prevLastId })
         ]);
-        console.log(`[cleanup] Deleted non-best submission ${submissionId} (best remains ${existing?.bestSubmissionId})`);
+        console.log(`[cleanup] Deleted previous submission ${prevLastId} (replaced by ${submissionId})`);
       }
     } catch (err) {
       console.error('[cleanup] Error during submission cleanup:', err.message);

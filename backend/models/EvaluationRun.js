@@ -72,6 +72,7 @@ const evaluationRunSchema = new mongoose.Schema({
     visual:        visualBucketSchema,
     performance:   performanceBucketSchema
   },
+  domSnapshotUrl: { type: String, default: null },
   errorLog: { type: String, default: '' }
 });
 

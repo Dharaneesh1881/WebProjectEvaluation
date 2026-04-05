@@ -15,14 +15,20 @@ import progressRouter from './routes/progress.js';
 const app = express();
 const httpServer = createServer(app);
 
+// Allow comma-separated origins (e.g. "https://app.vercel.app,http://localhost:5173")
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ['GET', 'POST']
   }
 });
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: '2mb' }));
 
 app.set('io', io);
@@ -35,11 +41,13 @@ app.use('/api', progressRouter);
 app.use('/api', adminRouter);
 
 // Subscribe to Redis pub/sub to receive worker notifications
-const redisSub = new IORedis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT) || 6379,
-  maxRetriesPerRequest: null
-});
+const redisSub = process.env.REDIS_URL
+  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+  : new IORedis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+      maxRetriesPerRequest: null
+    });
 
 redisSub.subscribe('eval:done', (err) => {
   if (err) console.error('Redis subscribe error:', err);

@@ -13,7 +13,8 @@ const pageScreenshotSchema = new mongoose.Schema({
   captureKey: { type: String, default: null },
   captureLabel: { type: String, default: null },
   scrollY: { type: Number, default: 0 },
-  isMain: { type: Boolean, default: false }
+  isMain: { type: Boolean, default: false },
+  viewport: { type: String, default: 'desktop' }
 }, { _id: false });
 
 const assignmentSchema = new mongoose.Schema({
@@ -27,7 +28,9 @@ const assignmentSchema = new mongoose.Schema({
     domTests: { type: [testSchema], default: [] },
     styleTests: { type: [testSchema], default: [] },
     interactionTests: { type: [testSchema], default: [] },
-    functionalityTests: { type: [testSchema], default: [] }
+    functionalityTests: { type: [testSchema], default: [] },
+    viewports: { type: [String], default: ['desktop'] },
+    timeoutMs: { type: Number, default: 30000 }
   },
 
   referenceScreenshotUrl: { type: String, default: null },

@@ -1,7 +1,9 @@
-export const SCREENSHOT_VIEWPORT = {
-  width: 1280,
-  height: 720
+export const VIEWPORTS = {
+  desktop: { width: 1280, height: 720 },
+  mobile:  { width: 390,  height: 844 }
 };
+
+export const SCREENSHOT_VIEWPORT = VIEWPORTS.desktop;
 
 const FREEZE_ANIMATIONS_STYLE = '*, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; animation-delay: 0s !important; transition-delay: 0s !important; }';
 
