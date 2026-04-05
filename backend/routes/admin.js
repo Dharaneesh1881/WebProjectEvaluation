@@ -12,6 +12,7 @@ import {
   resolveAllowedDomains
 } from '../worker/networkPolicy.js';
 import { captureBaseline } from '../worker/baselineCapture.js';
+import { createRedisClient } from '../utils/redis.js';
 
 const router = Router();
 
@@ -243,16 +244,9 @@ router.post('/admin/submissions/:submissionId/replay', requireAdmin, async (req,
     await EvaluationRun.deleteOne({ submissionId: req.params.submissionId });
 
     // Re-queue via the same BullMQ queue
-    const IORedis = (await import('ioredis')).default;
     const { Queue } = await import('bullmq');
-    const connection = process.env.REDIS_URL
-        ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
-        : new IORedis({
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT) || 6379,
-            maxRetriesPerRequest: null
-          });
-    const evalQueue = new Queue('eval', { connection });
+    const connection = createRedisClient();
+    const evalQueue = new Queue('evaluation', { connection });
     await evalQueue.add('evaluate', {
         submissionId: submission.submissionId,
         assignmentId: submission.assignmentId,

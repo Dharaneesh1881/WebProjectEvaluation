@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import IORedis from 'ioredis';
+import { createRedisClient } from './utils/redis.js';
 import submissionsRouter from './routes/submissions.js';
 import authRouter from './routes/auth.js';
 import assignmentsRouter from './routes/assignments.js';
@@ -41,13 +41,7 @@ app.use('/api', progressRouter);
 app.use('/api', adminRouter);
 
 // Subscribe to Redis pub/sub to receive worker notifications
-const redisSub = process.env.REDIS_URL
-  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
-  : new IORedis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT) || 6379,
-      maxRetriesPerRequest: null
-    });
+const redisSub = createRedisClient();
 
 redisSub.subscribe('eval:done', (err) => {
   if (err) console.error('Redis subscribe error:', err);

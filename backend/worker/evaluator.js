@@ -15,7 +15,6 @@
  */
 
 import puppeteer from 'puppeteer';
-import IORedis from 'ioredis';
 import Submission from '../models/Submission.js';
 import EvaluationRun from '../models/EvaluationRun.js';
 import Assignment from '../models/Assignment.js';
@@ -33,13 +32,8 @@ import { getMainFile, mergeFilesByType, normalizeStoredFiles } from '../utils/pr
 import LibraryPolicy from '../models/LibraryPolicy.js';
 import { uploadRawText } from '../utils/cloudinary.js';
 
-const redisPub = process.env.REDIS_URL
-  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
-  : new IORedis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT) || 6379,
-      maxRetriesPerRequest: null
-    });
+import { createRedisClient } from '../utils/redis.js';
+const redisPub = createRedisClient();
 
 function resolveReferencePages(assignment) {
   const pageScreenshots = Array.isArray(assignment.referencePageScreenshots)
