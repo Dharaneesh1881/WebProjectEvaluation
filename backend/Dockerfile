@@ -33,10 +33,11 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-COPY package*.json ./
+# Koyeb builds from repo root, so source files are under backend/
+COPY backend/package*.json ./
 RUN npm install --omit=dev
 
-COPY . .
+COPY backend/ .
 
 EXPOSE 3001
 
