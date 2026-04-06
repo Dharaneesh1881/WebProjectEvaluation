@@ -10,6 +10,8 @@ import IORedis from 'ioredis';
 export function createRedisClient(extraOptions = {}) {
   const url = process.env.REDIS_URL;
 
+  console.log('[Redis] Connecting via:', url ? `REDIS_URL (${url.substring(0, 20)}...)` : `REDIS_HOST=${process.env.REDIS_HOST || 'localhost'}`);
+
   if (url) {
     // Strip the protocol prefix so new URL() can parse it correctly
     // e.g. "rediss://user:pass@host:port" → parse host, port, tls, password
