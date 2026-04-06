@@ -34,7 +34,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app
 
 # Force full rebuild when this value changes (increment to bust cache)
-ARG CACHEBUST=20260406
+ARG CACHEBUST=20261881
 COPY backend/package*.json ./
 RUN npm install --omit=dev
 
